@@ -45,9 +45,24 @@ namespace TCP_Text_Editor_Full_Client
 
 
 
-            Console.WriteLine("> Sending Echo");
-            client.SendPacket(new EchoPacket("HOI!"));
-            client.SendPacket(new EchoPacket("Tomate 123!"));
+            Console.WriteLine("> Sending Echo as Client");
+            client.SendPacket(new EchoRequestPacket("HOI!"));
+            client.SendPacket(new EchoRequestPacket("Tomate 123!"));
+            System.Threading.Thread.Sleep(300);
+            Console.WriteLine();
+
+            Console.WriteLine("> Sending Echo as Server");
+            foreach (var x in server.Clients)
+                x.Value.SendPacket(new EchoRequestPacket("LOL"));
+            System.Threading.Thread.Sleep(300);
+            Console.WriteLine();
+
+
+            System.Threading.Thread.Sleep(500);
+            Console.WriteLine();
+
+            Console.WriteLine("> Logging in as Client");
+            client.SendPacket(new LoginRequestPacket("masl", "pass123"));
 
 
 

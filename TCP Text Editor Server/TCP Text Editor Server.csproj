@@ -44,7 +44,10 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="ClientInfo.cs" />
-    <Compile Include="MessagePackets\EchoPacket.cs" />
+    <Compile Include="MessagePackets\Reply\EchoReplyPacket.cs" />
+    <Compile Include="MessagePackets\Reply\LoginReplyPacket.cs" />
+    <Compile Include="MessagePackets\Request\LoginRequestPacket.cs" />
+    <Compile Include="MessagePackets\Request\EchoRequestPacket.cs" />
     <Compile Include="MessagePackets\MessagePacket.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

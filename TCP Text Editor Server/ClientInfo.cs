@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
@@ -48,6 +49,11 @@ namespace TCP_Text_Editor_Server
             int sent = 0;
             while (sent < data.Length)
                 sent += ClientSocket.Send(data, sent, data.Length, SocketFlags.None);
+        }
+
+        public override string ToString()
+        {
+            return $"<CLIENT - IP: {(ClientSocket.RemoteEndPoint as IPEndPoint).Address.MapToIPv4()} {(ClientSocket.RemoteEndPoint as IPEndPoint).Port}>";
         }
     }
 }

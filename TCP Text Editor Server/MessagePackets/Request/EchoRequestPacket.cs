@@ -6,19 +6,19 @@ using System.Threading.Tasks;
 
 namespace TCP_Text_Editor_Server.MessagePackets
 {
-    public class EchoPacket : MessagePacket
+    public class EchoRequestPacket : MessagePacket
     {
        
 
         public string Message;
 
-        public EchoPacket(string msg)
+        public EchoRequestPacket(string msg)
         {
-            MessagePacketType = MessagePacketTypeEnum.ECHO;
+            MessagePacketType = MessagePacketTypeEnum.ECHO_REQ;
             Message = msg;
         }
 
-        public EchoPacket(byte[] data)
+        public EchoRequestPacket(byte[] data)
         {
             FromByteArray(data);
         }

@@ -11,19 +11,28 @@ namespace TCP_Text_Editor_Server.MessagePackets
         public enum MessagePacketTypeEnum
         {
             NONE,
-            ECHO
+            ECHO_REQ,
+            ECHO_REP,
+            LOGIN_REQ,
+            LOGIN_REP,
         }
 
         public static Dictionary<MessagePacketTypeEnum, byte> MessagePacketTypeToByte = new Dictionary<MessagePacketTypeEnum, byte>()
         {
             { MessagePacketTypeEnum.NONE, 0 },
-            { MessagePacketTypeEnum.ECHO, 1 },
+            { MessagePacketTypeEnum.ECHO_REQ, 1 },
+            { MessagePacketTypeEnum.ECHO_REP, 2 },
+            { MessagePacketTypeEnum.LOGIN_REQ, 3 },
+            { MessagePacketTypeEnum.LOGIN_REP, 4 },
         };
 
         public static Dictionary<byte, MessagePacketTypeEnum> ByteToMessagePacketType = new Dictionary<byte, MessagePacketTypeEnum>()
         {
-            { 0, MessagePacketTypeEnum.NONE },
-            { 1, MessagePacketTypeEnum.ECHO },
+            { 0,MessagePacketTypeEnum.NONE},
+            { 1,MessagePacketTypeEnum.ECHO_REQ },
+            { 2,MessagePacketTypeEnum.ECHO_REP},
+            { 3,MessagePacketTypeEnum.LOGIN_REQ },
+            { 4,MessagePacketTypeEnum.LOGIN_REP },
         };
 
         protected MessagePacketTypeEnum MessagePacketType;
@@ -44,9 +53,14 @@ namespace TCP_Text_Editor_Server.MessagePackets
             MessagePacketTypeEnum msgType = ByteToMessagePacketType[type];
             switch (msgType)
             {
-                case MessagePacketTypeEnum.ECHO:
-                    return new EchoPacket(data);
-
+                case MessagePacketTypeEnum.ECHO_REQ:
+                    return new EchoRequestPacket(data);
+                case MessagePacketTypeEnum.ECHO_REP:
+                    return new EchoReplyPacket(data);
+                case MessagePacketTypeEnum.LOGIN_REQ:
+                    return new LoginRequestPacket(data);
+                case MessagePacketTypeEnum.LOGIN_REP:
+                    return new LoginReplyPacket(data);
 
                 default:
                     return null;

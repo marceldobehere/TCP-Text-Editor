@@ -84,7 +84,7 @@ namespace TCP_Text_Editor_Server
                     }
 
 
-                    System.Threading.Thread.Sleep(50);
+                    System.Threading.Thread.Sleep(20);
                     //Console.WriteLine($"> ");
                 }
             }
@@ -99,12 +99,33 @@ namespace TCP_Text_Editor_Server
 
         public void HandlePacket(ClientInfo client, MessagePacket packet)
         {
-            if (packet is EchoPacket)
+            if (packet is EchoRequestPacket)
             {
-                EchoPacket ep = (packet as EchoPacket);
-                Console.WriteLine($"< Got Echo Packet: \"{ep.Message}\"");
-                client.SendPacket(new EchoPacket("LOL: " + ep.Message));
+                EchoRequestPacket ep = (packet as EchoRequestPacket);
+                Console.WriteLine($"< Got Echo Req Packet from {client}: \"{ep.Message}\"");
+                client.SendPacket(new EchoReplyPacket("GOT: " + ep.Message));
+                return;
             }
+
+            if (packet is EchoReplyPacket)
+            {
+                EchoReplyPacket ep = (packet as EchoReplyPacket);
+                Console.WriteLine($"< Got Echo Rep Packet from {client}: \"{ep.Message}\"");
+                return;
+            }
+
+            if (packet is LoginRequestPacket)
+            {
+                LoginRequestPacket lp = (packet as LoginRequestPacket);
+                Console.WriteLine($"< Got Login Req Packet from {client}: user: \"{lp.Username}\", pass: \"{lp.Password}\"");
+                client.SendPacket(new LoginReplyPacket(false)); // never accept logins for now
+                return;
+            }
+
+
+
+
+            Console.WriteLine($"< Dropped packet {packet} as the server does not know how to handle it!");
         }
     }
 }
