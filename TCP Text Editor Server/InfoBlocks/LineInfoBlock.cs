@@ -24,6 +24,13 @@ namespace TCP_Text_Editor_Server.InfoBlocks
             Locked = false;
         }
 
+        public LineInfoBlock(int lineNumber)
+        {
+            Id = 0;
+            Data = "";
+            LineNumber = lineNumber;
+        }
+
         public LineInfoBlock(byte[] bytes)
         {
             FromArray(bytes);

@@ -47,9 +47,11 @@
     <Compile Include="Extensions\SocketExtensions.cs" />
     <Compile Include="InfoBlocks\FileInfoBlock.cs" />
     <Compile Include="InfoBlocks\LineInfoBlock.cs" />
+    <Compile Include="MessagePackets\Reply\FilePeopleReplyPacket.cs" />
     <Compile Include="MessagePackets\Reply\EchoReplyPacket.cs" />
     <Compile Include="MessagePackets\Reply\FileReplyPacket.cs" />
     <Compile Include="MessagePackets\Reply\LoginReplyPacket.cs" />
+    <Compile Include="MessagePackets\Request\FilePeopleRequestPacket.cs" />
     <Compile Include="MessagePackets\Request\FileRequestPacket.cs" />
     <Compile Include="MessagePackets\Request\LoginRequestPacket.cs" />
     <Compile Include="MessagePackets\Request\EchoRequestPacket.cs" />

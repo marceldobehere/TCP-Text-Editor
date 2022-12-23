@@ -1,11 +1,17 @@
-﻿using System;
+﻿using Microsoft.Win32.SafeHandles;
+using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
+using TCP_Text_Editor_Server;
+using TCP_Text_Editor_Server.InfoBlocks;
 using TCP_Text_Editor_Server.MessagePackets;
+using static TCP_Text_Editor_Client.ConsoleHelper;
 
 namespace TCP_Text_Editor_Client
 {
@@ -19,10 +25,34 @@ namespace TCP_Text_Editor_Client
 
         public Queue<MessagePacket> Messages = new Queue<MessagePacket>();
 
+        SafeFileHandle _SafeFileHandle;
+        CharInfo[] _InternalFullScreenBuffer;
+        SmallRect _FullScreenRect;
+        CharThing[,] _FullScreenBuffer;
+
+        public List<LineInfoBlock> Lines { get; private set; }
+
+        public string CurrentFile { get; private set; } = "";
+        public bool LoggedIn { get; private set; } = false;
+        private bool _LoggedInPacket;
+
+        public string Username { get; private set; } = "";
+
+        public List<ClientInfo> PeopleInFile { get; private set; } = new List<ClientInfo>();
 
         public Client()
         {
             MainSocket = new Socket(SocketType.Stream, ProtocolType.Tcp);
+            Lines = new List<LineInfoBlock>();
+
+
+            _OldHeight = Console.WindowHeight;
+            _OldWidth = Console.WindowWidth;
+
+            _SafeFileHandle = ConsoleHelper.CreateFile("CONOUT$", 0x40000000, 2, IntPtr.Zero, FileMode.Open, 0, IntPtr.Zero);
+            _InternalFullScreenBuffer = new CharInfo[_OldHeight * _OldWidth];
+            _FullScreenRect = new SmallRect() { Left = 0, Right = (short)_OldWidth, Top = 0, Bottom = (short)_OldHeight };
+            _FullScreenBuffer = new CharThing[_OldWidth, _OldHeight];
         }
 
         public void Connect(string ip = "127.0.0.1", int port = 54545)
@@ -44,7 +74,8 @@ namespace TCP_Text_Editor_Client
         }
 
         public bool Exit { get; set; }
-        
+        public bool DoRender { get; private set; } = true;
+
         public void Loop()
         {
             Exit = false;
@@ -92,7 +123,7 @@ namespace TCP_Text_Editor_Client
             if (packet is EchoRequestPacket)
             {
                 EchoRequestPacket ep = (packet as EchoRequestPacket);
-                Console.WriteLine($"# Got Echo Req Packet from Server: \"{ep.Message}\"");
+                //Console.WriteLine($"# Got Echo Req Packet from Server: \"{ep.Message}\"");
                 SendPacket(new EchoReplyPacket("GOT: " + ep.Message));
                 return;
             }
@@ -100,33 +131,383 @@ namespace TCP_Text_Editor_Client
             if (packet is EchoReplyPacket)
             {
                 EchoReplyPacket ep = (packet as EchoReplyPacket);
-                Console.WriteLine($"# Got Echo Rep Packet from Server: \"{ep.Message}\"");
+                //Console.WriteLine($"# Got Echo Rep Packet from Server: \"{ep.Message}\"");
                 return;
             }
 
             if (packet is LoginReplyPacket)
             {
                 LoginReplyPacket ep = (packet as LoginReplyPacket);
-                Console.WriteLine($"# Got Login Rep Packet from Server: Login Accepted: \"{ep.Accepted}\", Message: \"{ep.Message}\"");
+                //Console.WriteLine($"# Got Login Rep Packet from Server: Login Accepted: \"{ep.Accepted}\", Message: \"{ep.Message}\"");
+                
+                LoggedIn = ep.Accepted;
+                _LoggedInPacket = true;
                 return;
             }
 
             if (packet is FileReplyPacket)
             {
                 FileReplyPacket fp = (packet as FileReplyPacket);
-                Console.WriteLine($"# Got File Rep Packet from Server: Accepted: {fp.Accepted}, Message: \"{fp.Message}\", Total Line Count: {fp.TotalLineCount}");
-                Console.WriteLine("# Lines:");
+                //Console.WriteLine($"# Got File Rep Packet from Server: Accepted: {fp.Accepted}, Message: \"{fp.Message}\", Total Line Count: {fp.TotalLineCount}");
+                //Console.WriteLine("# Lines:");
+                //foreach (var x in fp.Lines)
+                //    Console.WriteLine($" - {x.LineNumber}/{x.Id} - \"{x.Data}\"");
+                //Console.WriteLine();
+
+                while (Lines.Count < fp.TotalLineCount)
+                    Lines.Add(new LineInfoBlock(Lines.Count));
+
                 foreach (var x in fp.Lines)
-                    Console.WriteLine($" - {x.LineNumber}/{x.Id} - \"{x.Data}\"");
-                Console.WriteLine();
+                {
+                    Lines[x.LineNumber] = x;
+                }
+
+                return;
+            }
+
+            if (packet is FilePeopleReplyPacket)
+            {
+                FilePeopleReplyPacket fp = (packet as FilePeopleReplyPacket);
+
+                PeopleInFile.Clear();
+                PeopleInFile.AddRange(fp.Clients);
 
                 return;
             }
 
 
-
             Console.WriteLine($"# Dropped packet {packet} as the client does not know how to handle it!");
 
         }
+
+
+
+
+
+
+
+
+        public void RenderLoop()
+        {
+            Exit = false;
+            int frame = 0;
+            int fps = 1;
+
+            Stopwatch watchFps = new Stopwatch();
+            watchFps.Start();
+            Stopwatch watchFileUpdate = new Stopwatch();
+            watchFileUpdate.Start();
+            Stopwatch watchPplUpdate = new Stopwatch();
+            watchPplUpdate.Start();
+
+            while (!Exit)
+            {
+                for (int i = 0; i < 10; i++)
+                    HandleKeyboard();
+
+                try
+                { Resize(); }
+                catch (Exception e)
+                { Console.Title = $"RESIZE ERROR: {e.Message} {e}"; }
+
+                try
+                { Render(); }
+                catch (Exception e)
+                { Console.Title = $"RENDER ERROR: {e.Message} {e}"; }
+
+
+
+                System.Threading.Thread.Sleep(10);
+
+                if (watchFileUpdate.ElapsedMilliseconds >= 400)
+                {
+                    watchFileUpdate.Restart();
+
+                    int lineBuffer = 5;
+
+                    int tY = CursorY - lineBuffer;
+                    if (tY < 0)
+                        tY = 0;
+                    int amount = _OldHeight + lineBuffer + (CursorY - tY);
+                    SendPacket(new FileRequestPacket(CurrentFile, tY, amount));
+
+                }
+
+                if (watchPplUpdate.ElapsedMilliseconds >= 250)
+                {
+                    watchPplUpdate.Restart();
+
+                    SendPacket(new FilePeopleRequestPacket(CurrentFile, CursorX, CursorY, ScrollX, ScrollY, ScrollX + _OldWidth, ScrollY + _OldHeight));
+
+                }
+
+                frame++;
+                if (watchFps.ElapsedMilliseconds >= 1000)
+                {
+                    fps = frame;
+                    frame = 0;
+                    watchFps.Restart();
+
+                    Console.Title = $"TCP EDITOR CLIENT - {fps} FPS";
+                }
+
+               
+            }
+        }
+
+        private int _OldWidth, _OldHeight;
+
+
+        public void Resize()
+        {
+            if (_OldHeight == Console.WindowHeight &&
+                _OldWidth == Console.WindowWidth)
+                return;
+
+            _OldHeight = Console.WindowHeight;
+            _OldWidth = Console.WindowWidth;
+
+            _InternalFullScreenBuffer = new CharInfo[_OldHeight * _OldWidth];
+            _FullScreenRect = new SmallRect() { Left = 0, Right = (short)_OldWidth, Top = 0, Bottom = (short)_OldHeight };
+            _FullScreenBuffer = new CharThing[_OldWidth, _OldHeight];
+
+        }
+
+        static CharThing _EmptyChar = new CharThing(' ');
+        static CharThing _LineChar = new CharThing('-', ConsoleColor.DarkGreen);
+        public string TitleText { get; private set; } = "TEST";
+
+        public int ScrollX = 0, ScrollY = 0;
+        public int CursorX = 0, CursorY = 0;
+
+        private int _ActualCursorX = 0, _ActualCursorY = 0;
+
+
+        public void Render()
+        {
+            if (!DoRender)
+                return;
+
+            if (LoggedIn)
+                TitleText = $"USER: {Username}, FILE: \"{CurrentFile}\", {PeopleInFile.Count} PEOPLE IN FILE";
+            else
+                TitleText = $"NOT LOGGED IN";
+
+            if (ScrollY < 0)
+                ScrollY = 0;
+            if (ScrollX < 0)
+                ScrollX = 0;
+
+            if (CursorX < 0)
+                CursorX = 0;
+            if (CursorY < 0)
+                CursorY = 0;
+
+            if (_ActualCursorX < 0)
+                _ActualCursorX = 0;
+            if (_ActualCursorX >= _OldWidth)
+                _ActualCursorX = _OldWidth - 1;
+            if (_ActualCursorY < 0)
+                _ActualCursorY = 0;
+            if (_ActualCursorY >= _OldHeight)
+                _ActualCursorY = _OldHeight - 1;
+
+            int numLen = $"{ScrollY + _OldHeight + 10}".Length;
+            int xOffset = 1 + numLen;
+            int yOffset = 2;
+
+            if (_ActualCursorX > _OldWidth - 5 - xOffset)
+            {
+                _ActualCursorX--;
+                ScrollX++;
+            }
+            if (_ActualCursorY > _OldHeight - 5 - yOffset)
+            {
+                _ActualCursorY--;
+                ScrollY++;
+            }
+
+            if (_ActualCursorX < 5 + xOffset && ScrollX > 0)
+            {
+                _ActualCursorX++;
+                ScrollX--;
+            }
+            if (_ActualCursorY < 5 + yOffset && ScrollY > 0)
+            {
+                _ActualCursorY++;
+                ScrollY--;
+            }
+
+            for (int x = 0; x < _OldWidth; x++)
+            {
+                if (x < TitleText.Length)
+                    _FullScreenBuffer[x, 0] = new CharThing(TitleText[x], ConsoleColor.Yellow);
+                else
+                    _FullScreenBuffer[x, 0] = _EmptyChar;
+
+                _FullScreenBuffer[x, 1] = _LineChar;
+            }
+
+            for (int y = 0; y < _OldHeight - yOffset; y++)
+            {
+                string numStr = (ScrollY + y).ToString().PadLeft(numLen, '0');
+                for (int x = 0; x < numLen; x++)
+                    _FullScreenBuffer[x, y + yOffset] = new CharThing(numStr[x], ConsoleColor.Cyan);
+                if (y + ScrollY < Lines.Count)
+                {
+                    if (Lines[y + ScrollY].Locked)
+                        _FullScreenBuffer[numLen, y + yOffset] = new CharThing('-', ConsoleColor.Red);
+                    else
+                        _FullScreenBuffer[numLen, y + yOffset] = new CharThing('-', ConsoleColor.Green);
+                }
+                else
+                    _FullScreenBuffer[numLen, y + yOffset] = new CharThing('-', ConsoleColor.Green);
+            }
+
+
+            for (int y = 0; y < _OldHeight - yOffset; y++)
+            {
+                if (y + ScrollY < Lines.Count)
+                {
+                    LineInfoBlock line = Lines[y + ScrollY];
+                    for (int x = 0; x < _OldWidth - xOffset; x++)
+                    {
+                        if (x + ScrollX < line.Data.Length)
+                            _FullScreenBuffer[x + xOffset, y + yOffset] = new CharThing(line.Data[x + ScrollX]);
+                        else
+                            _FullScreenBuffer[x + xOffset, y + yOffset] = _EmptyChar;
+
+                        if (x + ScrollX == CursorX &&
+                            y + ScrollY == CursorY)
+                        {
+                            _ActualCursorX = x + xOffset;
+                            _ActualCursorY = y + yOffset;
+                        }
+                    }
+                }
+                else
+                {
+                    for (int x = 0; x < _OldWidth - xOffset; x++)
+                    {
+                        _FullScreenBuffer[x + xOffset, y + yOffset] = _EmptyChar;
+
+                        if (x + ScrollX == CursorX &&
+                            y + ScrollY == CursorY)
+                        {
+                            _ActualCursorX = x + xOffset;
+                            _ActualCursorY = y + yOffset;
+                        }
+                    }
+                }
+            }
+
+            foreach (var person in PeopleInFile)
+            {
+                if (person.CursorX >= ScrollX &&
+                    person.CursorY >= ScrollY &&
+                    person.CursorX < ScrollX + _OldWidth - xOffset &&
+                    person.CursorY < ScrollY + _OldHeight - yOffset)
+                {
+                    _FullScreenBuffer[person.CursorX - ScrollX + xOffset, person.CursorY - ScrollY + yOffset] = new CharThing('#', person.ClientColor);
+                }
+            }
+
+
+
+            for (int y = 0; y < _OldHeight; y++)
+                for (int x = 0; x < _OldWidth; x++)
+                    _InternalFullScreenBuffer[x + y * _OldWidth] = _FullScreenBuffer[x, y].ToCharInfo();
+
+
+            WriteConsoleOutputW(_SafeFileHandle, _InternalFullScreenBuffer, new Coord((short)_OldWidth, (short)_OldHeight), new Coord(0, 0), ref _FullScreenRect);
+
+            Console.CursorLeft = _ActualCursorX;
+            Console.CursorTop = _ActualCursorY;
+
+            try
+            {
+                Console.SetWindowPosition(0, 0);
+            }
+            catch (Exception e)
+            {
+
+            }
+        }
+
+        public void HandleKeyboard()
+        {
+            if (!Console.KeyAvailable)
+                return;
+            ConsoleKeyInfo info = Console.ReadKey(true);
+
+            if (info.Key == ConsoleKey.LeftArrow)
+                if (CursorX > 0)
+                    CursorX--;
+            if (info.Key == ConsoleKey.UpArrow)
+                if (CursorY > 0)
+                    CursorY--;
+            if (info.Key == ConsoleKey.RightArrow)
+                if (CursorX < 1000)
+                    CursorX++;
+            if (info.Key == ConsoleKey.DownArrow)
+                if (CursorY < Lines.Count + _OldHeight)
+                    CursorY++;
+
+            if (info.Key == ConsoleKey.Escape)
+            {
+                Console.Clear();
+                Console.WriteLine("> Enter Command:");
+                string cmd = Console.ReadLine();
+                DoCmd(cmd);
+            }
+
+        }
+
+
+        public void DoCmd(string cmd)
+        {
+            if (cmd.Equals("login"))
+            {
+                LoggedIn = false;
+                _LoggedInPacket = false;
+                Console.WriteLine("> Enter Username:");
+                string username = Console.ReadLine();
+                Username = username;
+                Console.WriteLine("> Enter Password:");
+                string pass = Console.ReadLine();
+                Console.WriteLine("\n> Waiting for reply...");
+                SendPacket(new LoginRequestPacket(username, pass));
+                while (!_LoggedInPacket)
+                    ;
+                
+                if (!LoggedIn)
+                {
+                    Console.WriteLine("Not Logged in!");
+                    Console.ReadLine();
+                }
+                else
+                    Console.WriteLine("Logged in.");
+                return;
+            }
+
+            if (cmd.Equals("file"))
+            {
+                Console.WriteLine("> Enter Filename:");
+                string filename = Console.ReadLine();
+                CurrentFile = filename;
+                Lines.Clear();
+                PeopleInFile.Clear();
+                CursorX = 0;
+                CursorY = 0;
+                ScrollX = 0;
+                ScrollY = 0;
+                return;
+            }
+        }
+
+
+
+
+
     }
 }

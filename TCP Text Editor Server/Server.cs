@@ -238,6 +238,8 @@ namespace TCP_Text_Editor_Server
                     return;
                 }
 
+                client.CurrentFile = fp.RelativePath;
+
                 string fullPath = BasePath + "/" + fp.RelativePath;
 
                 if (!File.Exists(fullPath))
@@ -284,7 +286,54 @@ namespace TCP_Text_Editor_Server
                 }
 
 
-                
+
+
+                return;
+            }
+
+            if (packet is FilePeopleRequestPacket)
+            {
+                FilePeopleRequestPacket fp = (packet as FilePeopleRequestPacket);
+                Console.WriteLine($"< Got File People Req Packet from {client}: \"{fp.RelativePath}\"");
+
+
+                if (fp.RelativePath.Contains(".."))
+                {
+                    client.SendPacket(new FilePeopleReplyPacket());
+                    return;
+                }
+
+                string fullPath = BasePath + "/" + fp.RelativePath;
+
+                if (!File.Exists(fullPath))
+                {
+                    client.SendPacket(new FilePeopleReplyPacket());
+                    return;
+                }
+
+                if (!Files.ContainsKey(fp.RelativePath))
+                {
+                    Files[fp.RelativePath] = new FileInfoBlock(fullPath, fp.RelativePath);
+                }
+
+                client.CursorX = fp.CursorX;
+                client.CursorY = fp.CursorY;
+
+                {
+                    List<ClientInfo> clients = new List<ClientInfo>();
+                    foreach (var c in Clients.Values)
+                        if (fp.RelativePath.Equals(c.CurrentFile) &&
+                            c.LoggedIn &&
+                            c != client &&
+                            c.CursorX >= fp.X1 && c.CursorX <= fp.X2 &&
+                            c.CursorY >= fp.Y1 && c.CursorY <= fp.Y2)
+                            clients.Add(c);
+
+                    client.SendPacket(new FilePeopleReplyPacket(clients));
+                }
+
+
+
 
                 return;
             }

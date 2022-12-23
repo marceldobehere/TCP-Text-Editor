@@ -22,12 +22,29 @@ namespace TCP_Text_Editor_Server
         public ulong BytesSent = 0;
         public ulong BytesReceived = 0;
 
+        public int CursorX = 0, CursorY = 0;
+
+        public string CurrentFile = "";
+
+        public ConsoleColor ClientColor = ConsoleColor.Blue;
+
+        public static Random rnd = new Random();
 
         public ClientInfo(Socket socket)
         {
             ClientSocket = socket;
             Username = "guest";
             LoggedIn = false;
+            CursorX = 0;
+            CursorY = 0;
+            ClientColor = (ConsoleColor)rnd.Next(16);
+        }
+
+        public ClientInfo(byte[] data)
+        {
+            FromPplByteArray(data);
+            LoggedIn = false;
+            CurrentFile = "";
         }
 
         public void UpdateByteCounter(ref ulong bytesSent, ref ulong bytesReceived)
@@ -81,6 +98,33 @@ namespace TCP_Text_Editor_Server
         public override string ToString()
         {
             return $"<CLIENT - IP: {(ClientSocket.RemoteEndPoint as IPEndPoint).Address.MapToIPv4()} {(ClientSocket.RemoteEndPoint as IPEndPoint).Port}>";
+        }
+
+
+        public byte[] ToPplByteArray()
+        {
+            List<byte> bytes = new List<byte>();
+            bytes.AddRange(BitConverter.GetBytes(CursorX));
+            bytes.AddRange(BitConverter.GetBytes(CursorY));
+            bytes.Add((byte)ClientColor);
+            bytes.AddRange(BitConverter.GetBytes(Username.Length));
+            bytes.AddRange(Encoding.UTF8.GetBytes(Username));
+
+            return bytes.ToArray();
+        }
+
+        public void FromPplByteArray(byte[] bytes)
+        {
+            int offset = 0;
+            CursorX = BitConverter.ToInt32(bytes, offset);
+            offset += 4;
+            CursorY = BitConverter.ToInt32(bytes, offset);
+            offset += 4;
+            ClientColor = (ConsoleColor)bytes[offset];
+            offset += 1;
+            int len = BitConverter.ToInt32(bytes, offset);
+            offset += 4;
+            Username = Encoding.UTF8.GetString(bytes, offset, len);
         }
     }
 }
