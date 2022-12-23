@@ -92,7 +92,7 @@ namespace TCP_Text_Editor_Client
             if (packet is EchoRequestPacket)
             {
                 EchoRequestPacket ep = (packet as EchoRequestPacket);
-                Console.WriteLine($"< Got Echo Req Packet from Server: \"{ep.Message}\"");
+                Console.WriteLine($"# Got Echo Req Packet from Server: \"{ep.Message}\"");
                 SendPacket(new EchoReplyPacket("GOT: " + ep.Message));
                 return;
             }
@@ -100,20 +100,32 @@ namespace TCP_Text_Editor_Client
             if (packet is EchoReplyPacket)
             {
                 EchoReplyPacket ep = (packet as EchoReplyPacket);
-                Console.WriteLine($"< Got Echo Rep Packet from Server: \"{ep.Message}\"");
+                Console.WriteLine($"# Got Echo Rep Packet from Server: \"{ep.Message}\"");
                 return;
             }
 
             if (packet is LoginReplyPacket)
             {
                 LoginReplyPacket ep = (packet as LoginReplyPacket);
-                Console.WriteLine($"< Got Login Rep Packet from Server: Login Accepted: \"{ep.Accepted}\"");
+                Console.WriteLine($"# Got Login Rep Packet from Server: Login Accepted: \"{ep.Accepted}\", Message: \"{ep.Message}\"");
+                return;
+            }
+
+            if (packet is FileReplyPacket)
+            {
+                FileReplyPacket fp = (packet as FileReplyPacket);
+                Console.WriteLine($"# Got File Rep Packet from Server: Accepted: {fp.Accepted}, Message: \"{fp.Message}\", Total Line Count: {fp.TotalLineCount}");
+                Console.WriteLine("# Lines:");
+                foreach (var x in fp.Lines)
+                    Console.WriteLine($" - {x.LineNumber}/{x.Id} - \"{x.Data}\"");
+                Console.WriteLine();
+
                 return;
             }
 
 
 
-            Console.WriteLine($"< Dropped packet {packet} as the client does not know how to handle it!");
+            Console.WriteLine($"# Dropped packet {packet} as the client does not know how to handle it!");
 
         }
     }

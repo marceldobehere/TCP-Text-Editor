@@ -6,6 +6,9 @@ using System.Threading.Tasks;
 using System.Net;
 using System.Net.Sockets;
 using TCP_Text_Editor_Server.MessagePackets;
+using TCP_Text_Editor_Server.InfoBlocks;
+using System.IO;
+using TCP_Text_Editor_Server.Extensions;
 
 namespace TCP_Text_Editor_Server
 {
@@ -21,6 +24,16 @@ namespace TCP_Text_Editor_Server
         public Dictionary<Socket, ClientInfo> Clients { get; }
         public bool Exit { get; private set; }
 
+        public Dictionary<string, int> UsernameLogins { get; }
+
+        public Dictionary<string, FileInfoBlock> Files { get; }
+
+        public ulong TotalBytesSent = 0;
+        public ulong TotalBytesReceived = 0;
+
+
+
+
 
         public Server(string basePath, string ip = "127.0.0.1", int port = 54545)
         {
@@ -31,6 +44,9 @@ namespace TCP_Text_Editor_Server
             MainServerSocket = new Socket(SocketType.Stream, ProtocolType.Tcp);
             ServerOn = false;
             Clients = new Dictionary<Socket, ClientInfo>();
+
+            UsernameLogins = new Dictionary<string, int>();
+            Files = new Dictionary<string, FileInfoBlock>();
         }
 
         public void Start()
@@ -57,11 +73,15 @@ namespace TCP_Text_Editor_Server
             {
                 Exit = false;
                 IAsyncResult acceptResult = null;
+                int t = 0;
                 while (!Exit && ServerOn)
                 {
+                    if (t++ > 10)
+                        t = 0;
+
                     if (acceptResult == null)
                         acceptResult = MainServerSocket.BeginAccept(null, null);
-                    System.Threading.Thread.Sleep(50);
+                    System.Threading.Thread.Sleep(20);
                     if (acceptResult != null && acceptResult.IsCompleted)
                     {
                         try
@@ -77,15 +97,37 @@ namespace TCP_Text_Editor_Server
                         }
                     }
 
+                    for (int i = 0; i < Clients.Count; i++)
+                    {
+                        Socket socket = Clients.ElementAt(i).Key;
+                        if (!socket.IsAlive())
+                        {
+                            Console.WriteLine($"> {Clients.ElementAt(i).Value} Disconnected!");
+                            Clients.Remove(socket);
+                            i--;
+                        }
+                    }
+
                     foreach (var client in Clients.Values)
                     {
-                        if (client.CheckPackets())
-                            HandlePacket(client, client.Messages.Dequeue());
+                        try
+                        {
+                            client.UpdateByteCounter(ref TotalBytesSent, ref TotalBytesReceived);
+                            if (client.CheckPackets())
+                                HandlePacket(client, client.Messages.Dequeue());
+                        }
+                        catch (Exception e)
+                        {
+
+                        }
                     }
 
 
                     System.Threading.Thread.Sleep(20);
                     //Console.WriteLine($"> ");
+
+                    if (t == 0)
+                        WriteByteStats();
                 }
             }
             catch (Exception e)
@@ -96,9 +138,21 @@ namespace TCP_Text_Editor_Server
             }
         }
 
+        public void WriteByteStats()
+        {
+            Console.Title = $"STATS: REC: {TotalBytesReceived}, SENT: {TotalBytesSent}";
+        }
+
 
         public void HandlePacket(ClientInfo client, MessagePacket packet)
         {
+            #region GUEST
+            if (packet == null)
+            {
+                Console.WriteLine($"< NULL PACKET!");
+                return;
+            }
+
             if (packet is EchoRequestPacket)
             {
                 EchoRequestPacket ep = (packet as EchoRequestPacket);
@@ -118,12 +172,124 @@ namespace TCP_Text_Editor_Server
             {
                 LoginRequestPacket lp = (packet as LoginRequestPacket);
                 Console.WriteLine($"< Got Login Req Packet from {client}: user: \"{lp.Username}\", pass: \"{lp.Password}\"");
-                client.SendPacket(new LoginReplyPacket(false)); // never accept logins for now
+                if (UsernameLogins.ContainsKey(lp.Username))
+                {
+                    if (UsernameLogins[lp.Username] == lp.Password.GetHashCode())
+                    {
+                        client.SendPacket(new LoginReplyPacket(true));
+                        client.Username = lp.Username;
+                        client.LoggedIn = true;
+                    }
+                    else
+                    {
+                        client.SendPacket(new LoginReplyPacket(false, "Incorrect Password!"));
+                        client.Username = "";
+                        client.LoggedIn = false;
+                    }
+                    return;
+                }
+                else
+                {
+                    if (lp.Username.Length < 3)
+                    {
+                        client.SendPacket(new LoginReplyPacket(false, "Username must be atleast 3 characters long!"));
+                        client.Username = "";
+                        client.LoggedIn = false;
+                        return;
+                    }
+                    if (lp.Password.Length < 5)
+                    {
+                        client.SendPacket(new LoginReplyPacket(false, "Password must be atleast 5 characters long!"));
+                        client.Username = "";
+                        client.LoggedIn = false;
+                        return;
+                    }
+                    Console.WriteLine($"< Making new User for {lp.Username}");
+                    UsernameLogins[lp.Username] = lp.Password.GetHashCode();
+                    client.SendPacket(new LoginReplyPacket(true, "Created new User."));
+                    client.Username = lp.Username;
+                    client.LoggedIn = true;
+                    return;
+                }
+            }
+
+            #endregion
+
+            if (!client.LoggedIn)
+            {
+                Console.WriteLine($"< Dropped packet {packet} as the client is not logged in yet.");
                 return;
             }
 
+            #region USER
 
 
+            if (packet is FileRequestPacket)
+            {
+
+
+                FileRequestPacket fp = (packet as FileRequestPacket);
+                Console.WriteLine($"< Got File Req Packet from {client}: \"{fp.RelativePath}\"");
+
+
+                if (fp.RelativePath.Contains(".."))
+                {
+                    client.SendPacket(new FileReplyPacket(false, "The path cannot go out of bounds!"));
+                    return;
+                }
+
+                string fullPath = BasePath + "/" + fp.RelativePath;
+
+                if (!File.Exists(fullPath))
+                {
+                    client.SendPacket(new FileReplyPacket(false, "The file does not exist!"));
+                    return;
+                }
+
+                if (fp.FirstLineNumber < 0)
+                {
+                    client.SendPacket(new FileReplyPacket(false, "Invalid Starting Line!"));
+                    return;
+                }
+
+                if (fp.LineCount < 0)
+                {
+                    client.SendPacket(new FileReplyPacket(false, "Invalid Line count!"));
+                    return;
+                }
+
+                if (!Files.ContainsKey(fp.RelativePath))
+                {
+                    Files[fp.RelativePath] = new FileInfoBlock(fullPath, fp.RelativePath);
+                }
+
+                {
+                    FileInfoBlock file = Files[fp.RelativePath];
+                    List<LineInfoBlock> lines = new List<LineInfoBlock>();
+
+                    int firstLineNum = fp.FirstLineNumber;
+                    if (!fp.UseLineNumber)
+                        firstLineNum = file.Lines.FindIndex((LineInfoBlock x) => { return x.Id == fp.FirstLineId; });
+
+                    if (firstLineNum < 0)
+                    {
+                        client.SendPacket(new FileReplyPacket(false, "Invalid Starting Line ID!"));
+                        return;
+                    }
+
+                    for (int i = firstLineNum; i < firstLineNum + fp.LineCount && i < file.Lines.Count; i++)
+                        lines.Add(file.Lines[i]);
+
+                    client.SendPacket(new FileReplyPacket(true, lines, file.Lines.Count));
+                }
+
+
+                
+
+                return;
+            }
+
+            #endregion USER
 
             Console.WriteLine($"< Dropped packet {packet} as the server does not know how to handle it!");
         }

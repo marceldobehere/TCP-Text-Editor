@@ -19,7 +19,7 @@ namespace TCP_Text_Editor_Full_Client
         {
             Console.WriteLine("> Starting Server...");
 
-            Server server = new Server(@"E:\C SHARP\TCP Text Editor\TCP Text Editor Server\bin\Debug\test folder");
+            Server server = new Server(@"E:\C SHARP\TCP Text Editor\TCP Text Editor Full Client\bin\Debug\testing");
 
             server.Start();
 
@@ -58,16 +58,29 @@ namespace TCP_Text_Editor_Full_Client
             Console.WriteLine();
 
 
-            System.Threading.Thread.Sleep(500);
+            System.Threading.Thread.Sleep(200);
             Console.WriteLine();
 
             Console.WriteLine("> Logging in as Client");
             client.SendPacket(new LoginRequestPacket("masl", "pass123"));
+            //client.SendPacket(new LoginRequestPacket("masl", "pass123"));
+            //client.SendPacket(new LoginRequestPacket("ma", "pass123"));
+            //client.SendPacket(new LoginRequestPacket("masl", "pass12"));
+            //client.SendPacket(new LoginRequestPacket("masl", "pass123"));
 
 
 
-            System.Threading.Thread.Sleep(500);
+            System.Threading.Thread.Sleep(200);
             Console.WriteLine();
+
+
+            Console.WriteLine("> Requesting test.txt");
+            client.SendPacket(new FileRequestPacket("test.txt", 0, 30));
+
+
+            System.Threading.Thread.Sleep(600);
+            Console.WriteLine();
+
 
 
             Console.WriteLine();

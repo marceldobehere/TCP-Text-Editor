@@ -15,6 +15,8 @@ namespace TCP_Text_Editor_Server.MessagePackets
             ECHO_REP,
             LOGIN_REQ,
             LOGIN_REP,
+            FILE_REQ,
+            FILE_REP,
         }
 
         public static Dictionary<MessagePacketTypeEnum, byte> MessagePacketTypeToByte = new Dictionary<MessagePacketTypeEnum, byte>()
@@ -24,16 +26,27 @@ namespace TCP_Text_Editor_Server.MessagePackets
             { MessagePacketTypeEnum.ECHO_REP, 2 },
             { MessagePacketTypeEnum.LOGIN_REQ, 3 },
             { MessagePacketTypeEnum.LOGIN_REP, 4 },
+            { MessagePacketTypeEnum.FILE_REQ, 5 },
+             { MessagePacketTypeEnum.FILE_REP, 6 },
         };
 
-        public static Dictionary<byte, MessagePacketTypeEnum> ByteToMessagePacketType = new Dictionary<byte, MessagePacketTypeEnum>()
+        private static Dictionary<byte, MessagePacketTypeEnum> _ByteToMessagePacketType = new Dictionary<byte, MessagePacketTypeEnum>();
+        
+        private static bool reverseInit = false;
+        public static Dictionary<byte, MessagePacketTypeEnum> ByteToMessagePacketType
         {
-            { 0,MessagePacketTypeEnum.NONE},
-            { 1,MessagePacketTypeEnum.ECHO_REQ },
-            { 2,MessagePacketTypeEnum.ECHO_REP},
-            { 3,MessagePacketTypeEnum.LOGIN_REQ },
-            { 4,MessagePacketTypeEnum.LOGIN_REP },
-        };
+            get
+            {
+                if (!reverseInit)
+                {
+                    foreach (var x in MessagePacketTypeToByte)
+                        _ByteToMessagePacketType.Add(x.Value, x.Key);
+                    reverseInit = true;
+                }
+                return _ByteToMessagePacketType;
+            }
+        }
+
 
         protected MessagePacketTypeEnum MessagePacketType;
 
@@ -61,6 +74,10 @@ namespace TCP_Text_Editor_Server.MessagePackets
                     return new LoginRequestPacket(data);
                 case MessagePacketTypeEnum.LOGIN_REP:
                     return new LoginReplyPacket(data);
+                case MessagePacketTypeEnum.FILE_REQ:
+                    return new FileRequestPacket(data);
+                case MessagePacketTypeEnum.FILE_REP:
+                    return new FileReplyPacket(data);
 
                 default:
                     return null;

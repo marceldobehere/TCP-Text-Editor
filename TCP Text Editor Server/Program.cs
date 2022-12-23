@@ -12,15 +12,13 @@ namespace TCP_Text_Editor_Server
         {
             Console.WriteLine("Starting Server...");
 
-            Server server = new Server(@"E:\C SHARP\TCP Text Editor\TCP Text Editor Server\bin\Debug\test folder");
+            Server server = new Server(@"E:\C SHARP\TCP Text Editor\TCP Text Editor Full Client\bin\Debug\testing");
 
             server.Start();
 
             server.Loop();
 
-
             server.Stop();
-
 
 
             Console.WriteLine("\n\n\nEnd.");
