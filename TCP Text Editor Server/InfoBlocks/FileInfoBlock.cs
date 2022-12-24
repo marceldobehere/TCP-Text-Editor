@@ -38,7 +38,7 @@ namespace TCP_Text_Editor_Server.InfoBlocks
             using (StreamReader reader = new StreamReader(filename))
             {
                 while (!reader.EndOfStream)
-                    Lines.Add(new LineInfoBlock(reader.ReadLine(), RandomId, Lines.Count));
+                    Lines.Add(new LineInfoBlock(reader.ReadLine().Replace("\t", "    "), RandomId, Lines.Count));
             }
         }
     }

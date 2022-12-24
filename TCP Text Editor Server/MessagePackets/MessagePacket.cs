@@ -19,6 +19,8 @@ namespace TCP_Text_Editor_Server.MessagePackets
             FILE_REP,
             FILE_PPL_REQ,
             FILE_PPL_REP,
+            LINE_EDIT_REQ,
+            LINE_EDIT_REP
         }
 
         public static Dictionary<MessagePacketTypeEnum, byte> MessagePacketTypeToByte = new Dictionary<MessagePacketTypeEnum, byte>()
@@ -32,10 +34,12 @@ namespace TCP_Text_Editor_Server.MessagePackets
             { MessagePacketTypeEnum.FILE_REP, 6 },
             { MessagePacketTypeEnum.FILE_PPL_REQ, 7 },
             { MessagePacketTypeEnum.FILE_PPL_REP, 8 },
+            { MessagePacketTypeEnum.LINE_EDIT_REQ, 9 },
+            { MessagePacketTypeEnum.LINE_EDIT_REP, 10 },
         };
 
         private static Dictionary<byte, MessagePacketTypeEnum> _ByteToMessagePacketType = new Dictionary<byte, MessagePacketTypeEnum>();
-        
+
         private static bool reverseInit = false;
         public static Dictionary<byte, MessagePacketTypeEnum> ByteToMessagePacketType
         {
@@ -86,6 +90,10 @@ namespace TCP_Text_Editor_Server.MessagePackets
                     return new FilePeopleRequestPacket(data);
                 case MessagePacketTypeEnum.FILE_PPL_REP:
                     return new FilePeopleReplyPacket(data);
+                case MessagePacketTypeEnum.LINE_EDIT_REQ:
+                    return new LineEditRequestPacket(data);
+                case MessagePacketTypeEnum.LINE_EDIT_REP:
+                    return new LineEditReplyPacket(data);
 
                 default:
                     return null;

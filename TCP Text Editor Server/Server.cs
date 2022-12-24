@@ -122,6 +122,16 @@ namespace TCP_Text_Editor_Server
                         }
                     }
 
+                    DateTime now = DateTime.Now;
+                    foreach (var file in Files.Values)
+                    {
+                        foreach (var line in file.Lines)
+                        {
+                            if (line.Locked)
+                                if (line.LockTime.AddMilliseconds(1000) < now)
+                                    line.Locked = false;
+                        }
+                    }
 
                     System.Threading.Thread.Sleep(20);
                     //Console.WriteLine($"> ");
@@ -336,6 +346,44 @@ namespace TCP_Text_Editor_Server
 
 
                 return;
+            }
+
+            if (packet is LineEditRequestPacket)
+            {
+                LineEditRequestPacket lp = (packet as LineEditRequestPacket);
+
+                LineInfoBlock line = Files[client.CurrentFile].Lines.Find((LineInfoBlock block) => { return block.Id == lp.Line.Id; });
+
+                if (line == null)
+                {
+                    Console.WriteLine($"< Dropped packet {packet} as line doesn't exist for {client}");
+                    client.SendPacket(new LineEditReplyPacket(false, line.Data));
+                    return;
+                }
+
+                DateTime now = DateTime.Now;
+
+                if (line.Locked)
+                {
+                    if (line.LockTime.AddMilliseconds(1000) < now && line.LockedBy != client.Username)
+                        line.Locked = false;
+                    else
+                    {
+                        Console.WriteLine($"< Dropped packet {packet} as line is locked");
+                        client.SendPacket(new LineEditReplyPacket(false, line.Data));
+                        return;
+                    }
+                }
+
+                line.Locked = true;
+                line.LockedBy = client.Username;
+                line.LockTime = now;
+
+                line.Data = lp.Line.Data;
+
+                client.SendPacket(new LineEditReplyPacket(true, line.Data));
+                return;
+
             }
 
             #endregion USER

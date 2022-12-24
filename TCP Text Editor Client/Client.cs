@@ -40,6 +40,9 @@ namespace TCP_Text_Editor_Client
 
         public List<ClientInfo> PeopleInFile { get; private set; } = new List<ClientInfo>();
 
+        public bool InsertMode { get; private set; } = true;
+
+
         public Client()
         {
             MainSocket = new Socket(SocketType.Stream, ProtocolType.Tcp);
@@ -139,7 +142,7 @@ namespace TCP_Text_Editor_Client
             {
                 LoginReplyPacket ep = (packet as LoginReplyPacket);
                 //Console.WriteLine($"# Got Login Rep Packet from Server: Login Accepted: \"{ep.Accepted}\", Message: \"{ep.Message}\"");
-                
+
                 LoggedIn = ep.Accepted;
                 _LoggedInPacket = true;
                 return;
@@ -175,6 +178,12 @@ namespace TCP_Text_Editor_Client
                 return;
             }
 
+            if (packet is LineEditReplyPacket)
+            {
+                LineEditReplyPacket lp = (packet as LineEditReplyPacket);
+
+                return;
+            }
 
             Console.WriteLine($"# Dropped packet {packet} as the client does not know how to handle it!");
 
@@ -251,7 +260,7 @@ namespace TCP_Text_Editor_Client
                     Console.Title = $"TCP EDITOR CLIENT - {fps} FPS";
                 }
 
-               
+
             }
         }
 
@@ -356,7 +365,12 @@ namespace TCP_Text_Editor_Client
                 if (y + ScrollY < Lines.Count)
                 {
                     if (Lines[y + ScrollY].Locked)
+                    {
+                        //if (Lines[y + ScrollY].LockedBy == client)
+                        //    _FullScreenBuffer[numLen, y + yOffset] = new CharThing('-', ConsoleColor.Yellow);
+                        //else
                         _FullScreenBuffer[numLen, y + yOffset] = new CharThing('-', ConsoleColor.Red);
+                    }
                     else
                         _FullScreenBuffer[numLen, y + yOffset] = new CharThing('-', ConsoleColor.Green);
                 }
@@ -441,24 +455,96 @@ namespace TCP_Text_Editor_Client
             ConsoleKeyInfo info = Console.ReadKey(true);
 
             if (info.Key == ConsoleKey.LeftArrow)
+            {
                 if (CursorX > 0)
                     CursorX--;
-            if (info.Key == ConsoleKey.UpArrow)
+            }
+            else if (info.Key == ConsoleKey.UpArrow)
+            {
                 if (CursorY > 0)
                     CursorY--;
-            if (info.Key == ConsoleKey.RightArrow)
+            }
+            else if (info.Key == ConsoleKey.RightArrow)
+            {
                 if (CursorX < 1000)
                     CursorX++;
-            if (info.Key == ConsoleKey.DownArrow)
+            }
+            else if (info.Key == ConsoleKey.DownArrow)
+            {
                 if (CursorY < Lines.Count + _OldHeight)
                     CursorY++;
-
-            if (info.Key == ConsoleKey.Escape)
+            }
+            else if (info.Key == ConsoleKey.Escape)
             {
                 Console.Clear();
                 Console.WriteLine("> Enter Command:");
                 string cmd = Console.ReadLine();
                 DoCmd(cmd);
+            }
+
+
+
+            else if (info.Key == ConsoleKey.Backspace)
+            {
+                if (CursorY >= 0 && CursorY < Lines.Count)
+                {
+                    if (CursorX > 0)
+                    {
+                        if (CursorX < Lines[CursorY].Data.Length + 1)
+                        {
+                            if (!Lines[CursorY].Locked || Lines[CursorY].LockedBy == Username)
+                            {
+                                Lines[CursorY].Data =
+                                Lines[CursorY].Data.Substring(0, CursorX - 1) +
+                                Lines[CursorY].Data.Substring(CursorX, Lines[CursorY].Data.Length - CursorX);
+                                SendPacket(new LineEditRequestPacket(Lines[CursorY]));
+                            }
+                            
+                        }
+                        CursorX--;
+                    }
+                    else
+                    {
+                        // DELETE LINE
+                    }
+                }
+            }
+
+            else if (info.Key == ConsoleKey.Enter)
+            {
+                // NEW LINE
+            }
+
+            else
+            {
+                if (CursorY >= 0 && CursorY < Lines.Count)
+                {
+                    //if (CursorX > 0)
+                    {
+                        if (CursorX < Lines[CursorY].Data.Length + 1)
+                        {
+                            if (!Lines[CursorY].Locked || Lines[CursorY].LockedBy == Username)
+                            {
+                                if (InsertMode)
+                                {
+                                    Lines[CursorY].Data =
+                                        Lines[CursorY].Data.Substring(0, CursorX) +
+                                        info.KeyChar.ToString().Replace("\t", "    ") +
+                                        Lines[CursorY].Data.Substring(CursorX, Lines[CursorY].Data.Length - CursorX);
+                                }
+                                else
+                                {
+                                    Lines[CursorY].Data =
+                                        Lines[CursorY].Data.Substring(0, CursorX - 1) +
+                                        info.KeyChar.ToString().Replace("\t", "    ") +
+                                        Lines[CursorY].Data.Substring(CursorX, Lines[CursorY].Data.Length - CursorX);
+                                }
+                                SendPacket(new LineEditRequestPacket(Lines[CursorY]));
+                            }
+                            CursorX++;
+                        }
+                    }
+                }
             }
 
         }
@@ -479,7 +565,7 @@ namespace TCP_Text_Editor_Client
                 SendPacket(new LoginRequestPacket(username, pass));
                 while (!_LoggedInPacket)
                     ;
-                
+
                 if (!LoggedIn)
                 {
                     Console.WriteLine("Not Logged in!");
