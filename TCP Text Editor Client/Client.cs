@@ -58,7 +58,7 @@ namespace TCP_Text_Editor_Client
             _FullScreenBuffer = new CharThing[_OldWidth, _OldHeight];
         }
 
-        public void Connect(string ip = "127.0.0.1", int port = 54545)
+        public void Connect(string ip = "localhost", int port = 54545)
         {
             Connect(Dns.GetHostAddresses(ip)[0], port);
         }

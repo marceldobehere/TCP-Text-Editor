@@ -35,7 +35,7 @@ namespace TCP_Text_Editor_Server
 
 
 
-        public Server(string basePath, string ip = "127.0.0.1", int port = 54545)
+        public Server(string basePath, string ip = "localhost", int port = 54545)
         {
             BasePath = basePath;
             ServerIP = Dns.GetHostAddresses(ip)[0];
