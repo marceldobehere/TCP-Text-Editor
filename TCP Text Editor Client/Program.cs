@@ -31,7 +31,7 @@ namespace TCP_Text_Editor_Client
             
             
             Console.WriteLine("> Connecting Client...");
-            client.Connect("6.tcp.ngrok.io", 19842);
+            client.Connect(ip, port);
 
 
 
