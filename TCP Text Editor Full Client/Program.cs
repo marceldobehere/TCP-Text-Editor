@@ -19,7 +19,7 @@ namespace TCP_Text_Editor_Full_Client
         {
             Console.WriteLine("> Starting Server...");
 
-            Server server = new Server(@"E:\C SHARP\TCP Text Editor\TCP Text Editor Full Client\bin\Debug\testing");
+            Server server = new Server("testing");
 
             server.Start();
 

@@ -37,7 +37,10 @@ namespace TCP_Text_Editor_Server
 
         public Server(string basePath, string ip = "localhost", int port = 54545)
         {
+            if (basePath.Length < 4 || !Path.IsPathRooted(basePath))
+                basePath = AppContext.BaseDirectory + "/" + basePath;
             BasePath = basePath;
+
             ServerIP = Dns.GetHostAddresses(ip)[0];
             ServerPort = port;
 
