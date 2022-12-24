@@ -60,7 +60,7 @@ namespace TCP_Text_Editor_Client
 
         public void Connect(string ip = "127.0.0.1", int port = 54545)
         {
-            Connect(IPAddress.Parse(ip), port);
+            Connect(Dns.GetHostAddresses(ip)[0], port);
         }
 
         public void Connect(IPAddress serverIP, int serverPort)

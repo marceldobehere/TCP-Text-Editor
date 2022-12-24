@@ -14,8 +14,24 @@ namespace TCP_Text_Editor_Client
         {
             Console.WriteLine("> Creating Client...");
             Client client = new Client();
+
+            Console.WriteLine($"Enter IP: (Press Enter to use local server)");
+            string ip = Console.ReadLine();
+            int port = 0;
+            if (ip.Length == 0)
+            {
+                ip = "localhost";
+                port = 54545;
+            }
+            else
+            {
+                Console.WriteLine($"Enter Port: ");
+                port = int.Parse(Console.ReadLine());
+            }
+            
+            
             Console.WriteLine("> Connecting Client...");
-            client.Connect();
+            client.Connect("6.tcp.ngrok.io", 19842);
 
 
 

@@ -38,7 +38,7 @@ namespace TCP_Text_Editor_Server
         public Server(string basePath, string ip = "127.0.0.1", int port = 54545)
         {
             BasePath = basePath;
-            ServerIP = IPAddress.Parse(ip);
+            ServerIP = Dns.GetHostAddresses(ip)[0];
             ServerPort = port;
 
             MainServerSocket = new Socket(SocketType.Stream, ProtocolType.Tcp);
