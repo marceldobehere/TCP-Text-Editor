@@ -28,9 +28,9 @@ namespace TCP_Text_Editor_Server.InfoBlocks
             LockedBy = "";
         }
 
-        public LineInfoBlock(int lineNumber)
+        public LineInfoBlock(int lineNumber, ushort id)
         {
-            Id = 0;
+            Id = id;
             Data = "";
             LineNumber = lineNumber;
 

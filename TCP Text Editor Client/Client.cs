@@ -79,6 +79,12 @@ namespace TCP_Text_Editor_Client
         public bool Exit { get; set; }
         public bool DoRender { get; private set; } = true;
 
+        public bool EditCurrentLine { get; private set; } = false;
+        public ushort EditCurrentLineId { get; private set; } = 0;
+        public int EditCurrentLineNum { get; private set; } = -1;
+        public string EditCurrentLineData { get; private set; } = "";
+        public DateTime EditCurrentLineStart { get; private set; }
+
         public void Loop()
         {
             Exit = false;
@@ -158,11 +164,53 @@ namespace TCP_Text_Editor_Client
                 //Console.WriteLine();
 
                 while (Lines.Count < fp.TotalLineCount)
-                    Lines.Add(new LineInfoBlock(Lines.Count));
+                    Lines.Add(new LineInfoBlock(Lines.Count, 1));
 
                 foreach (var x in fp.Lines)
                 {
-                    Lines[x.LineNumber] = x;
+                    if (EditCurrentLineId == x.Id && EditCurrentLineNum == x.LineNumber)
+                    {
+                        if (EditCurrentLine)
+                            EditCurrentLine = EditCurrentLineStart.AddSeconds(1) > DateTime.Now;
+
+                        if (!EditCurrentLine)
+                            Lines[x.LineNumber] = x;
+                    }
+                    else
+                        Lines[x.LineNumber] = x;
+                }
+
+                //if (UseLineId)
+                //{
+                //    LineInfoBlock info = Lines.Find((LineInfoBlock a) => { return a.Id == UsedLineId; });
+                //    if (info != null)
+                //    {
+                //        int diff = info.LineNumber - CursorY;
+                //        ScrollY += diff;
+                //        CursorY += diff;
+                //        UseLineId = false;
+                //        UsedLineId = 0;
+                //    }
+                //}
+
+                if (CursorY < Lines.Count && Lines[CursorY].Id != CursorYId)
+                {
+                    LineInfoBlock info = Lines.Find((LineInfoBlock a) => { return a.Id == CursorYId; });
+                    if (info == null && CursorY == 0)
+                        info = Lines[0];
+                    if ((info != null)  || (info == null && CursorY == 0))
+                    {
+                        int diff = info.LineNumber - CursorY;
+                        ScrollY += diff;
+                        CursorY += diff;
+                        CursorYId = info.Id;
+                    }
+                    else
+                    {
+                        if (CursorYId == 0 && CursorY < Lines.Count)
+                            CursorYId = Lines[CursorY].Id;
+                    }
+
                 }
 
                 return;
@@ -193,7 +241,8 @@ namespace TCP_Text_Editor_Client
 
 
 
-
+        private bool UseLineId = false;
+        private ushort UsedLineId = 0;
 
 
         public void RenderLoop()
@@ -208,6 +257,8 @@ namespace TCP_Text_Editor_Client
             watchFileUpdate.Start();
             Stopwatch watchPplUpdate = new Stopwatch();
             watchPplUpdate.Start();
+            Stopwatch watchLineUpdate = new Stopwatch();
+            watchLineUpdate.Start();
 
             while (!Exit)
             {
@@ -224,11 +275,25 @@ namespace TCP_Text_Editor_Client
                 catch (Exception e)
                 { Console.Title = $"RENDER ERROR: {e.Message} {e}"; }
 
+                if (watchLineUpdate.ElapsedMilliseconds > 400)
+                {
+                    if (EditCurrentLine)
+                    {
+                        int index = Lines.FindIndex((LineInfoBlock info) => { return info.Id == EditCurrentLineId; });
+                        if (index != -1)
+                        {
+                            Lines[index].Data = EditCurrentLineData;
+                            SendPacket(new LineEditRequestPacket(Lines[index]));
+                        }
 
+                        EditCurrentLine = EditCurrentLineStart.AddSeconds(1) > DateTime.Now;
+                    }
+                    watchLineUpdate.Restart();
+                }
 
                 System.Threading.Thread.Sleep(10);
 
-                if (watchFileUpdate.ElapsedMilliseconds >= 400)
+                if (watchFileUpdate.ElapsedMilliseconds >= 200)
                 {
                     watchFileUpdate.Restart();
 
@@ -237,9 +302,20 @@ namespace TCP_Text_Editor_Client
                     int tY = CursorY - lineBuffer;
                     if (tY < 0)
                         tY = 0;
-                    int amount = _OldHeight + lineBuffer + (CursorY - tY);
-                    SendPacket(new FileRequestPacket(CurrentFile, tY, amount));
 
+                    int amount = _OldHeight + lineBuffer + (CursorY - tY);
+                    if (tY == 0)
+                    {
+                        UseLineId = false;
+                        UsedLineId = 0;
+                        SendPacket(new FileRequestPacket(CurrentFile, tY, amount));
+                    }
+                    else
+                    {
+                        UseLineId = true;
+                        UsedLineId = Lines[tY].Id;
+                        SendPacket(new FileRequestPacket(CurrentFile, Lines[tY].Id, amount));
+                    }
                 }
 
                 if (watchPplUpdate.ElapsedMilliseconds >= 250)
@@ -288,6 +364,7 @@ namespace TCP_Text_Editor_Client
 
         public int ScrollX = 0, ScrollY = 0;
         public int CursorX = 0, CursorY = 0;
+        public ushort CursorYId = 0;
 
         private int _ActualCursorX = 0, _ActualCursorY = 0;
 
@@ -366,10 +443,10 @@ namespace TCP_Text_Editor_Client
                 {
                     if (Lines[y + ScrollY].Locked)
                     {
-                        //if (Lines[y + ScrollY].LockedBy == client)
-                        //    _FullScreenBuffer[numLen, y + yOffset] = new CharThing('-', ConsoleColor.Yellow);
-                        //else
-                        _FullScreenBuffer[numLen, y + yOffset] = new CharThing('-', ConsoleColor.Red);
+                        if (Lines[y + ScrollY].LockedBy == Username)
+                            _FullScreenBuffer[numLen, y + yOffset] = new CharThing('-', ConsoleColor.Yellow);
+                        else
+                            _FullScreenBuffer[numLen, y + yOffset] = new CharThing('-', ConsoleColor.Red);
                     }
                     else
                         _FullScreenBuffer[numLen, y + yOffset] = new CharThing('-', ConsoleColor.Green);
@@ -463,6 +540,9 @@ namespace TCP_Text_Editor_Client
             {
                 if (CursorY > 0)
                     CursorY--;
+
+                if (CursorY < Lines.Count)
+                    CursorYId = Lines[CursorY].Id;
             }
             else if (info.Key == ConsoleKey.RightArrow)
             {
@@ -473,6 +553,9 @@ namespace TCP_Text_Editor_Client
             {
                 if (CursorY < Lines.Count + _OldHeight)
                     CursorY++;
+
+                if (CursorY < Lines.Count)
+                    CursorYId = Lines[CursorY].Id;
             }
             else if (info.Key == ConsoleKey.Escape)
             {
@@ -497,9 +580,17 @@ namespace TCP_Text_Editor_Client
                                 Lines[CursorY].Data =
                                 Lines[CursorY].Data.Substring(0, CursorX - 1) +
                                 Lines[CursorY].Data.Substring(CursorX, Lines[CursorY].Data.Length - CursorX);
-                                SendPacket(new LineEditRequestPacket(Lines[CursorY]));
+
+                                EditCurrentLine = true;
+                                EditCurrentLineStart = DateTime.Now;
+                                EditCurrentLineId = Lines[CursorY].Id;
+                                EditCurrentLineData = Lines[CursorY].Data;
+                                EditCurrentLineNum = CursorY;
+                                Lines[CursorY].LockedBy = Username;
+                                Lines[CursorY].Locked = true;
+                                //SendPacket(new LineEditRequestPacket(Lines[CursorY]));
                             }
-                            
+
                         }
                         CursorX--;
                     }
@@ -512,7 +603,42 @@ namespace TCP_Text_Editor_Client
 
             else if (info.Key == ConsoleKey.Enter)
             {
-                // NEW LINE
+                // NEW 
+                try
+                {
+                    SendPacket(new LineAddRequestPacket(Lines[CursorY].Id, 0,
+                        Lines[CursorY].Data.Substring(0, CursorX),
+                        Lines[CursorY].Data.Substring(CursorX, Lines[CursorY].Data.Length - CursorX))
+                        );
+
+                    CursorX = 0;
+                    CursorY++;
+
+                    if (CursorY < Lines.Count)
+                        CursorYId = 0;
+                }
+                catch (Exception e1)
+                {
+                    try
+                    {
+                        SendPacket(new LineAddRequestPacket(Lines[CursorY].Id, 0,
+                            Lines[CursorY].Data,
+                            "")
+                            );
+
+                        CursorX = 0;
+                        CursorY++;
+
+                        if (CursorY < Lines.Count)
+                            CursorYId = 0;
+                    }
+                    catch (Exception e2)
+                    {
+
+                    }
+                }
+
+
             }
 
             else
@@ -539,7 +665,15 @@ namespace TCP_Text_Editor_Client
                                         info.KeyChar.ToString().Replace("\t", "    ") +
                                         Lines[CursorY].Data.Substring(CursorX, Lines[CursorY].Data.Length - CursorX);
                                 }
-                                SendPacket(new LineEditRequestPacket(Lines[CursorY]));
+                                //SendPacket(new LineEditRequestPacket(Lines[CursorY]));
+
+                                EditCurrentLine = true;
+                                EditCurrentLineStart = DateTime.Now;
+                                EditCurrentLineId = Lines[CursorY].Id;
+                                EditCurrentLineData = Lines[CursorY].Data;
+                                EditCurrentLineNum = CursorY;
+                                Lines[CursorY].LockedBy = Username;
+                                Lines[CursorY].Locked = true;
                             }
                             CursorX++;
                         }

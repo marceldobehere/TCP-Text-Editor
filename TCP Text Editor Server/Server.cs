@@ -389,6 +389,24 @@ namespace TCP_Text_Editor_Server
 
             }
 
+            if (packet is LineAddRequestPacket)
+            {
+                LineAddRequestPacket lp = (packet as LineAddRequestPacket);
+                int index = Files[client.CurrentFile].Lines.FindIndex((LineInfoBlock info) => { return info.Id == lp.LineId1; });
+
+                List<LineInfoBlock> blocks = Files[client.CurrentFile].Lines;
+
+                Console.WriteLine($"INSERT \"{lp.LineData1}\", \"{lp.LineData2}\"");
+
+                blocks[index].Data = lp.LineData1;
+                blocks.Insert(index + 1, new LineInfoBlock(lp.LineData2, Files[client.CurrentFile].RandomId, index + 1));
+
+                for (int i = 0; i < blocks.Count; i++)
+                    blocks[i].LineNumber = i;
+
+                return;
+            }
+
             #endregion USER
 
             Console.WriteLine($"< Dropped packet {packet} as the server does not know how to handle it!");

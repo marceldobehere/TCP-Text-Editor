@@ -52,6 +52,7 @@
     <Compile Include="MessagePackets\Reply\FileReplyPacket.cs" />
     <Compile Include="MessagePackets\Reply\LineEditReplyPacket.cs" />
     <Compile Include="MessagePackets\Reply\LoginReplyPacket.cs" />
+    <Compile Include="MessagePackets\Request\LineAddRequestPacket.cs" />
     <Compile Include="MessagePackets\Request\LineEditRequestPacket.cs" />
     <Compile Include="MessagePackets\Request\FilePeopleRequestPacket.cs" />
     <Compile Include="MessagePackets\Request\FileRequestPacket.cs" />

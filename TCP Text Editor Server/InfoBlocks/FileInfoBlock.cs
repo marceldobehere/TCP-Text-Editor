@@ -13,7 +13,7 @@ namespace TCP_Text_Editor_Server.InfoBlocks
         public string RelativePath;
         public List<LineInfoBlock> Lines;
 
-        public HashSet<ushort> givenIds = new HashSet<ushort>();
+        public HashSet<ushort> givenIds = new HashSet<ushort>() { 0, 1, 2, 3, 4, 5 };
 
         private static Random rnd = new Random();
 
