@@ -15,8 +15,10 @@ namespace TCP_Text_Editor_Server.MessagePackets
 
         public int LineCount;
 
+        public int LineHash;
 
-        public FileRequestPacket(string relativePath, int firstLineNum, int lineCount)
+
+        public FileRequestPacket(string relativePath, int firstLineNum, int lineCount, int lineHash)
         {
             MessagePacketType = MessagePacketTypeEnum.FILE_REQ;
             RelativePath = relativePath;
@@ -24,9 +26,10 @@ namespace TCP_Text_Editor_Server.MessagePackets
             FirstLineNumber = firstLineNum;
             UseLineNumber = true;
             LineCount = lineCount;
+            LineHash = lineHash;
         }
 
-        public FileRequestPacket(string relativePath, ushort firstLineId, int lineCount)
+        public FileRequestPacket(string relativePath, ushort firstLineId, int lineCount, int lineHash)
         {
             MessagePacketType = MessagePacketTypeEnum.FILE_REQ;
             RelativePath = relativePath;
@@ -34,6 +37,7 @@ namespace TCP_Text_Editor_Server.MessagePackets
             FirstLineId = firstLineId;
             UseLineNumber = false;
             LineCount = lineCount;
+            LineHash = lineHash;
         }
 
         public FileRequestPacket(byte[] data)
@@ -53,7 +57,9 @@ namespace TCP_Text_Editor_Server.MessagePackets
             LineCount = BitConverter.ToInt32(data, offset);
             offset += 4;
             UseLineNumber = data[offset] == 1;
-
+            offset += 1;
+            LineHash = BitConverter.ToInt32(data, offset);
+            offset += 4;
         }
 
         public override byte[] ToByteArray()
@@ -65,6 +71,7 @@ namespace TCP_Text_Editor_Server.MessagePackets
             bytes.AddRange(BitConverter.GetBytes(FirstLineId)); // 5 + x
             bytes.AddRange(BitConverter.GetBytes(LineCount)); // 7 + x
             bytes.Add((byte)(UseLineNumber ? 1 : 0)); // 11 + x
+            bytes.AddRange(BitConverter.GetBytes(LineHash)); // 15 + x
             return bytes.ToArray();
         }
     }

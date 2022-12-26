@@ -9,6 +9,7 @@ using TCP_Text_Editor_Server.MessagePackets;
 using TCP_Text_Editor_Server.InfoBlocks;
 using System.IO;
 using TCP_Text_Editor_Server.Extensions;
+using System.Diagnostics;
 
 namespace TCP_Text_Editor_Server
 {
@@ -30,7 +31,13 @@ namespace TCP_Text_Editor_Server
 
         public ulong TotalBytesSent = 0;
         public ulong TotalBytesReceived = 0;
+        public ulong TotalPacketsSent = 0;
+        public ulong TotalPacketsReceived = 0;
 
+        public ulong TotalBytesSentOld = 0;
+        public ulong TotalBytesReceivedOld = 0;
+        public ulong TotalPacketsSentOld = 0;
+        public ulong TotalPacketsReceivedOld = 0;
 
 
 
@@ -72,26 +79,26 @@ namespace TCP_Text_Editor_Server
 
         public void Loop()
         {
+            ConsoleLogHelper.StartLoop();
             try
             {
                 Exit = false;
                 IAsyncResult acceptResult = null;
-                int t = 0;
+                Stopwatch fpsWatch = new Stopwatch();
+                fpsWatch.Start();
                 while (!Exit && ServerOn)
                 {
-                    if (t++ > 10)
-                        t = 0;
 
                     if (acceptResult == null)
                         acceptResult = MainServerSocket.BeginAccept(null, null);
-                    System.Threading.Thread.Sleep(20);
+                    //System.Threading.Thread.Sleep(20);
                     if (acceptResult != null && acceptResult.IsCompleted)
                     {
                         try
                         {
                             Socket conn = MainServerSocket.EndAccept(acceptResult);
                             acceptResult = null;
-                            Console.WriteLine($"> Connection moment!");
+                            ConsoleLogHelper.WriteLine($"> Connection moment!");
                             Clients.Add(conn, new ClientInfo(conn));
                         }
                         catch (Exception e)
@@ -105,7 +112,7 @@ namespace TCP_Text_Editor_Server
                         Socket socket = Clients.ElementAt(i).Key;
                         if (!socket.IsAlive())
                         {
-                            Console.WriteLine($"> {Clients.ElementAt(i).Value} Disconnected!");
+                            ConsoleLogHelper.WriteLine($"> {Clients.ElementAt(i).Value} Disconnected!");
                             Clients.Remove(socket);
                             i--;
                         }
@@ -115,7 +122,7 @@ namespace TCP_Text_Editor_Server
                     {
                         try
                         {
-                            client.UpdateByteCounter(ref TotalBytesSent, ref TotalBytesReceived);
+                            client.UpdateByteCounter(ref TotalBytesSent, ref TotalBytesReceived, ref TotalPacketsSent, ref TotalPacketsReceived);
                             if (client.CheckPackets())
                                 HandlePacket(client, client.Messages.Dequeue());
                         }
@@ -131,16 +138,19 @@ namespace TCP_Text_Editor_Server
                         foreach (var line in file.Lines)
                         {
                             if (line.Locked)
-                                if (line.LockTime.AddMilliseconds(1000) < now)
+                                if (line.LockTime.AddMilliseconds(3000) < now)
                                     line.Locked = false;
                         }
                     }
 
-                    System.Threading.Thread.Sleep(20);
+                    //System.Threading.Thread.Sleep(10);
                     //Console.WriteLine($"> ");
 
-                    if (t == 0)
+                    if (fpsWatch.ElapsedMilliseconds > 1000)
+                    {
                         WriteByteStats();
+                        fpsWatch.Restart();
+                    }
                 }
             }
             catch (Exception e)
@@ -153,7 +163,17 @@ namespace TCP_Text_Editor_Server
 
         public void WriteByteStats()
         {
-            Console.Title = $"STATS: REC: {TotalBytesReceived}, SENT: {TotalBytesSent}";
+            ulong diffReceived = TotalBytesReceived - TotalBytesReceivedOld;
+            ulong diffSent = TotalBytesSent - TotalBytesSentOld;
+            TotalBytesReceivedOld = TotalBytesReceived;
+            TotalBytesSentOld = TotalBytesSent;
+
+            ulong diffPacketsReceived = TotalPacketsReceived - TotalPacketsReceivedOld;
+            ulong diffPacketsSent = TotalPacketsSent - TotalPacketsSentOld;
+            TotalPacketsReceivedOld = TotalPacketsReceived;
+            TotalPacketsSentOld = TotalPacketsSent;
+
+            Console.Title = $"STATS: REC: {TotalBytesReceived}, SENT: {TotalBytesSent}, ({diffSent} B/S UP, {diffReceived} B/S DOWN) ({diffPacketsSent} P/S UP, {diffPacketsReceived} P/S DOWN)";
         }
 
 
@@ -162,14 +182,14 @@ namespace TCP_Text_Editor_Server
             #region GUEST
             if (packet == null)
             {
-                Console.WriteLine($"< NULL PACKET!");
+                ConsoleLogHelper.WriteLine($"< NULL PACKET!");
                 return;
             }
 
             if (packet is EchoRequestPacket)
             {
                 EchoRequestPacket ep = (packet as EchoRequestPacket);
-                Console.WriteLine($"< Got Echo Req Packet from {client}: \"{ep.Message}\"");
+                ConsoleLogHelper.WriteLine($"< Got Echo Req Packet from {client}: \"{ep.Message}\"");
                 client.SendPacket(new EchoReplyPacket("GOT: " + ep.Message));
                 return;
             }
@@ -177,7 +197,7 @@ namespace TCP_Text_Editor_Server
             if (packet is EchoReplyPacket)
             {
                 EchoReplyPacket ep = (packet as EchoReplyPacket);
-                Console.WriteLine($"< Got Echo Rep Packet from {client}: \"{ep.Message}\"");
+                ConsoleLogHelper.WriteLine($"< Got Echo Rep Packet from {client}: \"{ep.Message}\"");
                 return;
             }
 
@@ -230,7 +250,7 @@ namespace TCP_Text_Editor_Server
 
             if (!client.LoggedIn)
             {
-                Console.WriteLine($"< Dropped packet {packet} as the client is not logged in yet.");
+                ConsoleLogHelper.WriteLine($"< Dropped packet {packet} as the client is not logged in yet.");
                 return;
             }
 
@@ -242,7 +262,7 @@ namespace TCP_Text_Editor_Server
 
 
                 FileRequestPacket fp = (packet as FileRequestPacket);
-                Console.WriteLine($"< Got File Req Packet from {client}: \"{fp.RelativePath}\"");
+                ConsoleLogHelper.WriteLine($"< Got File Req Packet from {client}: \"{fp.RelativePath}\"");
 
 
                 if (fp.RelativePath.Contains(".."))
@@ -295,7 +315,12 @@ namespace TCP_Text_Editor_Server
                     for (int i = firstLineNum; i < firstLineNum + fp.LineCount && i < file.Lines.Count; i++)
                         lines.Add(file.Lines[i]);
 
-                    client.SendPacket(new FileReplyPacket(true, lines, file.Lines.Count));
+                    int lineHash = LineInfoBlock.GetLinesHash(lines);
+
+                    if (lineHash == fp.LineHash)
+                        ;// Console.WriteLine("< Line is the same!");
+                    else
+                        client.SendPacket(new FileReplyPacket(true, lines, file.Lines.Count));
                 }
 
 
@@ -307,7 +332,7 @@ namespace TCP_Text_Editor_Server
             if (packet is FilePeopleRequestPacket)
             {
                 FilePeopleRequestPacket fp = (packet as FilePeopleRequestPacket);
-                Console.WriteLine($"< Got File People Req Packet from {client}: \"{fp.RelativePath}\"");
+                ConsoleLogHelper.WriteLine($"< Got File People Req Packet from {client}: \"{fp.RelativePath}\"");
 
 
                 if (fp.RelativePath.Contains(".."))
@@ -359,7 +384,7 @@ namespace TCP_Text_Editor_Server
 
                 if (line == null)
                 {
-                    Console.WriteLine($"< Dropped packet {packet} as line doesn't exist for {client}");
+                    ConsoleLogHelper.WriteLine($"< Dropped packet {packet} as line doesn't exist for {client}");
                     client.SendPacket(new LineEditReplyPacket(false, line.Data));
                     return;
                 }
@@ -368,11 +393,11 @@ namespace TCP_Text_Editor_Server
 
                 if (line.Locked)
                 {
-                    if (line.LockTime.AddMilliseconds(1000) < now && line.LockedBy != client.Username)
+                    if (line.LockTime.AddMilliseconds(2000) < now || line.LockedBy == client.Username)
                         line.Locked = false;
                     else
                     {
-                        Console.WriteLine($"< Dropped packet {packet} as line is locked");
+                        ConsoleLogHelper.WriteLine($"< Dropped packet {packet} as line is locked by \"{line.LockedBy}\" and not \"{client.Username}\"");
                         client.SendPacket(new LineEditReplyPacket(false, line.Data));
                         return;
                     }
@@ -396,7 +421,7 @@ namespace TCP_Text_Editor_Server
 
                 List<LineInfoBlock> blocks = Files[client.CurrentFile].Lines;
 
-                Console.WriteLine($"INSERT \"{lp.LineData1}\", \"{lp.LineData2}\"");
+                ConsoleLogHelper.WriteLine($"INSERT \"{lp.LineData1}\", \"{lp.LineData2}\"");
 
                 blocks[index].Data = lp.LineData1;
                 blocks.Insert(index + 1, new LineInfoBlock(lp.LineData2, Files[client.CurrentFile].RandomId, index + 1));
@@ -409,7 +434,7 @@ namespace TCP_Text_Editor_Server
 
             #endregion USER
 
-            Console.WriteLine($"< Dropped packet {packet} as the server does not know how to handle it!");
+            ConsoleLogHelper.WriteLine($"< Dropped packet {packet} as the server does not know how to handle it!");
         }
     }
 }

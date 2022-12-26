@@ -21,6 +21,8 @@ namespace TCP_Text_Editor_Server
 
         public ulong BytesSent = 0;
         public ulong BytesReceived = 0;
+        public ulong PacketsSent = 0;
+        public ulong PacketsReceived = 0;
 
         public int CursorX = 0, CursorY = 0;
 
@@ -47,12 +49,17 @@ namespace TCP_Text_Editor_Server
             CurrentFile = "";
         }
 
-        public void UpdateByteCounter(ref ulong bytesSent, ref ulong bytesReceived)
+        public void UpdateByteCounter(ref ulong bytesSent, ref ulong bytesReceived, ref ulong packetsSent, ref ulong packetsReceived)
         {
             bytesSent += BytesSent;
             BytesSent = 0;
             bytesReceived += BytesReceived;
             BytesReceived = 0;
+            
+            packetsSent += PacketsSent;
+            PacketsSent = 0;
+            packetsReceived += PacketsReceived;
+            PacketsReceived = 0;
         }
 
 
@@ -77,6 +84,7 @@ namespace TCP_Text_Editor_Server
                     read += ClientSocket.Receive(data, read, size, SocketFlags.None);
                 Messages.Enqueue(MessagePacket.GetPacketFromByteArray(data, type, false));
                 BytesReceived += (ulong)(minData.Length + data.Length);
+                PacketsReceived++;
             }
 
             return Messages.Count > 0;
@@ -86,6 +94,7 @@ namespace TCP_Text_Editor_Server
         {
             if (!ClientSocket.IsAlive())
                 return;
+            PacketsSent++;
 
 
             byte[] data = MessagePacket.GetByteArrayFromPacket(packet);

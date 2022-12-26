@@ -44,8 +44,11 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="ClientInfo.cs" />
+    <Compile Include="Extensions\ConsoleLogHelper.cs" />
+    <Compile Include="Extensions\ListExtensions.cs" />
     <Compile Include="Extensions\SocketExtensions.cs" />
     <Compile Include="InfoBlocks\FileInfoBlock.cs" />
+    <Compile Include="InfoBlocks\IntegerExtension.cs" />
     <Compile Include="InfoBlocks\LineInfoBlock.cs" />
     <Compile Include="MessagePackets\Reply\FilePeopleReplyPacket.cs" />
     <Compile Include="MessagePackets\Reply\EchoReplyPacket.cs" />

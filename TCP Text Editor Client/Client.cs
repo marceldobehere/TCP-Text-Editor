@@ -171,7 +171,7 @@ namespace TCP_Text_Editor_Client
                     if (EditCurrentLineId == x.Id && EditCurrentLineNum == x.LineNumber)
                     {
                         if (EditCurrentLine)
-                            EditCurrentLine = EditCurrentLineStart.AddSeconds(1) > DateTime.Now;
+                            EditCurrentLine = EditCurrentLineStart.AddSeconds(2) > DateTime.Now;
 
                         if (!EditCurrentLine)
                             Lines[x.LineNumber] = x;
@@ -207,10 +207,16 @@ namespace TCP_Text_Editor_Client
                     }
                     else
                     {
-                        if (CursorYId == 0 && CursorY < Lines.Count)
+                        if (CursorYId == 0 && CursorY < Lines.Count && CursorYIdPlsNot != Lines[CursorY].Id)
                             CursorYId = Lines[CursorY].Id;
                     }
 
+                }
+                else
+                {
+                    if (CursorY >= Lines.Count)
+                        if (Lines.Count > 0)
+                            CursorY = Lines.Count - 1;
                 }
 
                 return;
@@ -247,96 +253,118 @@ namespace TCP_Text_Editor_Client
 
         public void RenderLoop()
         {
-            Exit = false;
-            int frame = 0;
-            int fps = 1;
-
-            Stopwatch watchFps = new Stopwatch();
-            watchFps.Start();
-            Stopwatch watchFileUpdate = new Stopwatch();
-            watchFileUpdate.Start();
-            Stopwatch watchPplUpdate = new Stopwatch();
-            watchPplUpdate.Start();
-            Stopwatch watchLineUpdate = new Stopwatch();
-            watchLineUpdate.Start();
-
-            while (!Exit)
+            try
             {
-                for (int i = 0; i < 10; i++)
-                    HandleKeyboard();
+                Exit = false;
+                int frame = 0;
+                int fps = 1;
 
-                try
-                { Resize(); }
-                catch (Exception e)
-                { Console.Title = $"RESIZE ERROR: {e.Message} {e}"; }
+                Stopwatch watchFps = new Stopwatch();
+                watchFps.Start();
+                Stopwatch watchFileUpdate = new Stopwatch();
+                watchFileUpdate.Start();
+                Stopwatch watchPplUpdate = new Stopwatch();
+                watchPplUpdate.Start();
+                Stopwatch watchLineUpdate = new Stopwatch();
+                watchLineUpdate.Start();
 
-                try
-                { Render(); }
-                catch (Exception e)
-                { Console.Title = $"RENDER ERROR: {e.Message} {e}"; }
-
-                if (watchLineUpdate.ElapsedMilliseconds > 400)
+                while (!Exit)
                 {
-                    if (EditCurrentLine)
+                    for (int i = 0; i < 20; i++)
+                        HandleKeyboard();
+
+
+                    if (watchLineUpdate.ElapsedMilliseconds > (LoggedIn ? 150 : 1500))
                     {
-                        int index = Lines.FindIndex((LineInfoBlock info) => { return info.Id == EditCurrentLineId; });
-                        if (index != -1)
+                        if (EditCurrentLine)
                         {
-                            Lines[index].Data = EditCurrentLineData;
-                            SendPacket(new LineEditRequestPacket(Lines[index]));
+                            int index = Lines.FindIndex((LineInfoBlock info) => { return info.Id == EditCurrentLineId; });
+                            if (index != -1)
+                            {
+                                Lines[index].Data = EditCurrentLineData;
+                                SendPacket(new LineEditRequestPacket(Lines[index]));
+                            }
+
+                            EditCurrentLine = EditCurrentLineStart.AddSeconds(1) > DateTime.Now;
                         }
-
-                        EditCurrentLine = EditCurrentLineStart.AddSeconds(1) > DateTime.Now;
+                        watchLineUpdate.Restart();
                     }
-                    watchLineUpdate.Restart();
-                }
 
-                System.Threading.Thread.Sleep(10);
+                    System.Threading.Thread.Sleep(10);
 
-                if (watchFileUpdate.ElapsedMilliseconds >= 200)
-                {
-                    watchFileUpdate.Restart();
-
-                    int lineBuffer = 5;
-
-                    int tY = CursorY - lineBuffer;
-                    if (tY < 0)
-                        tY = 0;
-
-                    int amount = _OldHeight + lineBuffer + (CursorY - tY);
-                    if (tY == 0)
+                    if (watchFileUpdate.ElapsedMilliseconds >= (LoggedIn ? 150 : 1000))
                     {
-                        UseLineId = false;
-                        UsedLineId = 0;
-                        SendPacket(new FileRequestPacket(CurrentFile, tY, amount));
+                        watchFileUpdate.Restart();
+
+                        int lineBuffer = 5;
+
+                        int tY = CursorY - lineBuffer;
+                        if (tY < 0)
+                            tY = 0;
+
+                        int amount = _OldHeight + lineBuffer + (CursorY - tY);
+
+
+                        List<LineInfoBlock> temp = new List<LineInfoBlock>();
+                        for (int i = tY; i < tY + amount && i < Lines.Count; i++)
+                            temp.Add(Lines[i]);
+                        int lineHash = LineInfoBlock.GetLinesHash(temp);
+
+
+                        if (tY == 0 || tY >= Lines.Count)
+                        {
+                            UseLineId = false;
+                            UsedLineId = 0;
+                            SendPacket(new FileRequestPacket(CurrentFile, tY, amount, lineHash));
+                        }
+                        else
+                        {
+                            UseLineId = true;
+                            UsedLineId = Lines[tY].Id;
+                            SendPacket(new FileRequestPacket(CurrentFile, Lines[tY].Id, amount, lineHash));
+                        }
                     }
-                    else
+
+                    if (watchPplUpdate.ElapsedMilliseconds >= (LoggedIn ? 150 : 1000))
                     {
-                        UseLineId = true;
-                        UsedLineId = Lines[tY].Id;
-                        SendPacket(new FileRequestPacket(CurrentFile, Lines[tY].Id, amount));
+                        watchPplUpdate.Restart();
+
+                        SendPacket(new FilePeopleRequestPacket(CurrentFile, CursorX, CursorY, ScrollX, ScrollY, ScrollX + _OldWidth, ScrollY + _OldHeight));
+
                     }
+
+
+
+                    try
+                    { Resize(); }
+                    catch (Exception e)
+                    { Console.Title = $"RESIZE ERROR: {e.Message} {e}"; }
+
+                    try
+                    { Render(); }
+                    catch (Exception e)
+                    { Console.Title = $"RENDER ERROR: {e.Message} {e}"; }
+
+
+                    frame++;
+                    if (watchFps.ElapsedMilliseconds >= 1000)
+                    {
+                        fps = frame;
+                        frame = 0;
+                        watchFps.Restart();
+
+                        Console.Title = $"TCP EDITOR CLIENT - {fps} FPS";
+                    }
+
+
+
                 }
-
-                if (watchPplUpdate.ElapsedMilliseconds >= 250)
-                {
-                    watchPplUpdate.Restart();
-
-                    SendPacket(new FilePeopleRequestPacket(CurrentFile, CursorX, CursorY, ScrollX, ScrollY, ScrollX + _OldWidth, ScrollY + _OldHeight));
-
-                }
-
-                frame++;
-                if (watchFps.ElapsedMilliseconds >= 1000)
-                {
-                    fps = frame;
-                    frame = 0;
-                    watchFps.Restart();
-
-                    Console.Title = $"TCP EDITOR CLIENT - {fps} FPS";
-                }
-
-
+            }
+            catch (Exception e)
+            {
+                Console.Clear();
+                Console.WriteLine(e);
+                Console.ReadLine();
             }
         }
 
@@ -364,7 +392,7 @@ namespace TCP_Text_Editor_Client
 
         public int ScrollX = 0, ScrollY = 0;
         public int CursorX = 0, CursorY = 0;
-        public ushort CursorYId = 0;
+        public ushort CursorYId = 0, CursorYIdPlsNot = 0;
 
         private int _ActualCursorX = 0, _ActualCursorY = 0;
 
@@ -389,6 +417,9 @@ namespace TCP_Text_Editor_Client
             if (CursorY < 0)
                 CursorY = 0;
 
+            _ActualCursorX = CursorX - ScrollX;
+            _ActualCursorY = CursorY - ScrollY;
+
             if (_ActualCursorX < 0)
                 _ActualCursorX = 0;
             if (_ActualCursorX >= _OldWidth)
@@ -402,23 +433,23 @@ namespace TCP_Text_Editor_Client
             int xOffset = 1 + numLen;
             int yOffset = 2;
 
-            if (_ActualCursorX > _OldWidth - 5 - xOffset)
+            while (_ActualCursorX > _OldWidth - 5 - xOffset)
             {
                 _ActualCursorX--;
                 ScrollX++;
             }
-            if (_ActualCursorY > _OldHeight - 5 - yOffset)
+            while (_ActualCursorY > _OldHeight - 5 - yOffset)
             {
                 _ActualCursorY--;
                 ScrollY++;
             }
 
-            if (_ActualCursorX < 5 + xOffset && ScrollX > 0)
+            while (_ActualCursorX < 5 + xOffset && ScrollX > 0)
             {
                 _ActualCursorX++;
                 ScrollX--;
             }
-            if (_ActualCursorY < 5 + yOffset && ScrollY > 0)
+            while (_ActualCursorY < 5 + yOffset && ScrollY > 0)
             {
                 _ActualCursorY++;
                 ScrollY--;
@@ -589,10 +620,12 @@ namespace TCP_Text_Editor_Client
                                 Lines[CursorY].LockedBy = Username;
                                 Lines[CursorY].Locked = true;
                                 //SendPacket(new LineEditRequestPacket(Lines[CursorY]));
+
                             }
 
                         }
-                        CursorX--;
+                        if (!Lines[CursorY].Locked || Lines[CursorY].LockedBy == Username)
+                            CursorX--;
                     }
                     else
                     {
@@ -603,41 +636,34 @@ namespace TCP_Text_Editor_Client
 
             else if (info.Key == ConsoleKey.Enter)
             {
-                // NEW 
-                try
+                if (CursorYId != 0)
                 {
-                    SendPacket(new LineAddRequestPacket(Lines[CursorY].Id, 0,
-                        Lines[CursorY].Data.Substring(0, CursorX),
-                        Lines[CursorY].Data.Substring(CursorX, Lines[CursorY].Data.Length - CursorX))
-                        );
-
+                    int CursorX2 = CursorX;
                     CursorX = 0;
-                    CursorY++;
+                    int CursorY2 = CursorY++;
 
-                    if (CursorY < Lines.Count)
+                    if (CursorY2 < Lines.Count)
                         CursorYId = 0;
-                }
-                catch (Exception e1)
-                {
-                    try
+                    CursorYIdPlsNot = 0;
+                    if (CursorY < Lines.Count)
+                        CursorYIdPlsNot = Lines[CursorY].Id;
+
+                    // NEW 
+                    if (CursorX2 < Lines[CursorY2].Data.Length)
                     {
-                        SendPacket(new LineAddRequestPacket(Lines[CursorY].Id, 0,
-                            Lines[CursorY].Data,
+                        SendPacket(new LineAddRequestPacket(Lines[CursorY2].Id, 0,
+                            Lines[CursorY2].Data.Substring(0, CursorX2),
+                            Lines[CursorY2].Data.Substring(CursorX2, Lines[CursorY2].Data.Length - CursorX2))
+                            );
+                    }
+                    else
+                    {
+                        SendPacket(new LineAddRequestPacket(Lines[CursorY2].Id, 0,
+                            Lines[CursorY2].Data,
                             "")
                             );
-
-                        CursorX = 0;
-                        CursorY++;
-
-                        if (CursorY < Lines.Count)
-                            CursorYId = 0;
-                    }
-                    catch (Exception e2)
-                    {
-
                     }
                 }
-
 
             }
 
@@ -649,20 +675,22 @@ namespace TCP_Text_Editor_Client
                     {
                         if (CursorX < Lines[CursorY].Data.Length + 1)
                         {
+                            string n1 = info.KeyChar.ToString().Replace("\t", "    ");
+                            int amt = n1.Length;
                             if (!Lines[CursorY].Locked || Lines[CursorY].LockedBy == Username)
                             {
                                 if (InsertMode)
                                 {
                                     Lines[CursorY].Data =
                                         Lines[CursorY].Data.Substring(0, CursorX) +
-                                        info.KeyChar.ToString().Replace("\t", "    ") +
+                                        n1 +
                                         Lines[CursorY].Data.Substring(CursorX, Lines[CursorY].Data.Length - CursorX);
                                 }
                                 else
                                 {
                                     Lines[CursorY].Data =
                                         Lines[CursorY].Data.Substring(0, CursorX - 1) +
-                                        info.KeyChar.ToString().Replace("\t", "    ") +
+                                        n1 +
                                         Lines[CursorY].Data.Substring(CursorX, Lines[CursorY].Data.Length - CursorX);
                                 }
                                 //SendPacket(new LineEditRequestPacket(Lines[CursorY]));
@@ -675,7 +703,7 @@ namespace TCP_Text_Editor_Client
                                 Lines[CursorY].LockedBy = Username;
                                 Lines[CursorY].Locked = true;
                             }
-                            CursorX++;
+                            CursorX += amt;
                         }
                     }
                 }

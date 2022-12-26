@@ -70,5 +70,25 @@ namespace TCP_Text_Editor_Server.InfoBlocks
             int len2 = BitConverter.ToInt32(bytes, 11 + len1);
             LockedBy = Encoding.UTF8.GetString(bytes, 15 + len1, len2);
         }
+
+        public override int GetHashCode()
+        {
+            return Id.GetHashCode()
+                .CombineHashCode(LineNumber.GetHashCode())
+                .CombineHashCode(Data.GetHashCode())
+                .CombineHashCode(Locked.GetHashCode())
+                //.CombineHashCode(LockTime.GetHashCode())
+                .CombineHashCode(LockedBy.GetHashCode());
+        }
+
+        public static int GetLinesHash(List<LineInfoBlock> lines)
+        {
+            if (lines.Count < 1)
+                return 0;
+            int hash = lines[0].GetHashCode();
+            for (int i = 1; i < lines.Count; i++)
+                hash = hash.CombineHashCode(lines[i].GetHashCode());
+            return hash;
+        }
     }
 }
