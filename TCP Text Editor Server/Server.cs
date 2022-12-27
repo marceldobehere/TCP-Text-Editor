@@ -88,58 +88,74 @@ namespace TCP_Text_Editor_Server
                 fpsWatch.Start();
                 while (!Exit && ServerOn)
                 {
-
-                    if (acceptResult == null)
-                        acceptResult = MainServerSocket.BeginAccept(null, null);
-                    //System.Threading.Thread.Sleep(20);
-                    if (acceptResult != null && acceptResult.IsCompleted)
+                    // ACCEPT REQ
                     {
-                        try
+                        if (acceptResult == null)
+                            acceptResult = MainServerSocket.BeginAccept(null, null);
+                        //System.Threading.Thread.Sleep(20);
+                        if (acceptResult != null && acceptResult.IsCompleted)
                         {
-                            Socket conn = MainServerSocket.EndAccept(acceptResult);
-                            acceptResult = null;
-                            ConsoleLogHelper.WriteLine($"> Connection moment!");
-                            Clients.Add(conn, new ClientInfo(conn));
-                        }
-                        catch (Exception e)
-                        {
+                            try
+                            {
+                                Socket conn = MainServerSocket.EndAccept(acceptResult);
+                                acceptResult = null;
+                                ConsoleLogHelper.WriteLine($"> Connection moment!");
+                                Clients.Add(conn, new ClientInfo(conn));
+                            }
+                            catch (Exception e)
+                            {
 
+                            }
                         }
                     }
 
-                    for (int i = 0; i < Clients.Count; i++)
+                    // DISCONNECT
                     {
-                        Socket socket = Clients.ElementAt(i).Key;
-                        if (!socket.IsAlive())
+                        for (int i = 0; i < Clients.Count; i++)
                         {
-                            ConsoleLogHelper.WriteLine($"> {Clients.ElementAt(i).Value} Disconnected!");
-                            Clients.Remove(socket);
-                            i--;
+                            Socket socket = Clients.ElementAt(i).Key;
+                            if (!socket.IsAlive())
+                            {
+                                ConsoleLogHelper.WriteLine($"> {Clients.ElementAt(i).Value} Disconnected!");
+                                Clients.Remove(socket);
+                                i--;
+                            }
                         }
                     }
 
-                    foreach (var client in Clients.Values)
-                    {
-                        try
-                        {
-                            client.UpdateByteCounter(ref TotalBytesSent, ref TotalBytesReceived, ref TotalPacketsSent, ref TotalPacketsReceived);
-                            if (client.CheckPackets())
-                                HandlePacket(client, client.Messages.Dequeue());
-                        }
-                        catch (Exception e)
-                        {
 
-                        }
-                    }
-
-                    DateTime now = DateTime.Now;
-                    foreach (var file in Files.Values)
+                    for (int temp_1 = 0; temp_1 < 5; temp_1++)
                     {
-                        foreach (var line in file.Lines)
+                        // PACKETS
+                        for (int temp_0 = 0; temp_0 < 15; temp_0++)
                         {
-                            if (line.Locked)
-                                if (line.LockTime.AddMilliseconds(3000) < now)
-                                    line.Locked = false;
+                            foreach (var client in Clients.Values)
+                            {
+                                try
+                                {
+                                    client.UpdateByteCounter(ref TotalBytesSent, ref TotalBytesReceived, ref TotalPacketsSent, ref TotalPacketsReceived);
+                                    if (client.CheckPackets())
+                                        HandlePacket(client, client.Messages.Dequeue());
+                                }
+                                catch (Exception e)
+                                {
+
+                                }
+                            }
+                        }
+
+                        // UNLOCK LINES
+                        {
+                            DateTime now = DateTime.UtcNow;
+                            foreach (var file in Files.Values)
+                            {
+                                foreach (var line in file.Lines)
+                                {
+                                    if (line.Locked)
+                                        if (line.LockTime.AddMilliseconds(3000) < now)
+                                            line.Locked = false;
+                                }
+                            }
                         }
                     }
 
@@ -380,36 +396,70 @@ namespace TCP_Text_Editor_Server
             {
                 LineEditRequestPacket lp = (packet as LineEditRequestPacket);
 
-                LineInfoBlock line = Files[client.CurrentFile].Lines.Find((LineInfoBlock block) => { return block.Id == lp.Line.Id; });
 
-                if (line == null)
+                DateTime now = DateTime.UtcNow;
+                foreach (LineInfoBlock pLine in lp.Lines)
                 {
-                    ConsoleLogHelper.WriteLine($"< Dropped packet {packet} as line doesn't exist for {client}");
-                    client.SendPacket(new LineEditReplyPacket(false, line.Data));
-                    return;
-                }
+                    LineInfoBlock SLine = Files[client.CurrentFile].Lines.Find((LineInfoBlock block) => { return block.Id == pLine.Id; });
 
-                DateTime now = DateTime.Now;
-
-                if (line.Locked)
-                {
-                    if (line.LockTime.AddMilliseconds(2000) < now || line.LockedBy == client.Username)
-                        line.Locked = false;
-                    else
+                    if (SLine == null)
                     {
-                        ConsoleLogHelper.WriteLine($"< Dropped packet {packet} as line is locked by \"{line.LockedBy}\" and not \"{client.Username}\"");
-                        client.SendPacket(new LineEditReplyPacket(false, line.Data));
-                        return;
+                        ConsoleLogHelper.WriteLine($"< Dropped packet {packet} as line {pLine.Id} doesn't exist for {client}");
+                        //client.SendPacket(new LineEditReplyPacket(false, line.Data));
+                        continue;
                     }
+
+                    if (SLine.Locked)
+                    {
+                        if (SLine.LockTime.AddMilliseconds(2000) < now || SLine.LockedBy == client.Username)
+                            SLine.Locked = false;
+                        else
+                        {
+                            ConsoleLogHelper.WriteLine($"< Dropped packet {packet} as line is locked by \"{SLine.LockedBy}\" and not \"{client.Username}\"");
+                            //client.SendPacket(new LineEditReplyPacket(false, line.Data));
+                            continue;
+                        }
+                    }
+
+                    SLine.Locked = true;
+                    SLine.LockedBy = client.Username;
+                    SLine.LockTime = now;
+
+                    SLine.Data = pLine.Data;
                 }
 
-                line.Locked = true;
-                line.LockedBy = client.Username;
-                line.LockTime = now;
 
-                line.Data = lp.Line.Data;
 
-                client.SendPacket(new LineEditReplyPacket(true, line.Data));
+                //LineInfoBlock line = Files[client.CurrentFile].Lines.Find((LineInfoBlock block) => { return block.Id == lp.Lines.Id; });
+
+                //if (line == null)
+                //{
+                //    ConsoleLogHelper.WriteLine($"< Dropped packet {packet} as line doesn't exist for {client}");
+                //    client.SendPacket(new LineEditReplyPacket(false, line.Data));
+                //    return;
+                //}
+
+                //DateTime now = DateTime.UtcNow;
+
+                //if (line.Locked)
+                //{
+                //    if (line.LockTime.AddMilliseconds(2000) < now || line.LockedBy == client.Username)
+                //        line.Locked = false;
+                //    else
+                //    {
+                //        ConsoleLogHelper.WriteLine($"< Dropped packet {packet} as line is locked by \"{line.LockedBy}\" and not \"{client.Username}\"");
+                //        client.SendPacket(new LineEditReplyPacket(false, line.Data));
+                //        return;
+                //    }
+                //}
+
+                //line.Locked = true;
+                //line.LockedBy = client.Username;
+                //line.LockTime = now;
+
+                //line.Data = lp.Lines.Data;
+
+                //client.SendPacket(new LineEditReplyPacket(true, line.Data));
                 return;
 
             }

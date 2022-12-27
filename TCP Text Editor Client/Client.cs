@@ -79,11 +79,13 @@ namespace TCP_Text_Editor_Client
         public bool Exit { get; set; }
         public bool DoRender { get; private set; } = true;
 
-        public bool EditCurrentLine { get; private set; } = false;
-        public ushort EditCurrentLineId { get; private set; } = 0;
-        public int EditCurrentLineNum { get; private set; } = -1;
-        public string EditCurrentLineData { get; private set; } = "";
-        public DateTime EditCurrentLineStart { get; private set; }
+        //public bool EditCurrentLine { get; private set; } = false;
+        //public ushort EditCurrentLineId { get; private set; } = 0;
+        //public int EditCurrentLineNum { get; private set; } = -1;
+        //public string EditCurrentLineData { get; private set; } = "";
+        //public DateTime EditCurrentLineStart { get; private set; }
+
+        public Dictionary<ushort, EditLineInfo> CurrentEditedLines { get; private set; } = new Dictionary<ushort, EditLineInfo>();
 
         public void Loop()
         {
@@ -166,15 +168,19 @@ namespace TCP_Text_Editor_Client
                 while (Lines.Count < fp.TotalLineCount)
                     Lines.Add(new LineInfoBlock(Lines.Count, 1));
 
+                DateTime now = DateTime.UtcNow;
+
                 foreach (var x in fp.Lines)
                 {
-                    if (EditCurrentLineId == x.Id && EditCurrentLineNum == x.LineNumber)
+                    if (CurrentEditedLines.ContainsKey(x.Id))//(EditCurrentLineId == x.Id && EditCurrentLineNum == x.LineNumber)
                     {
-                        if (EditCurrentLine)
-                            EditCurrentLine = EditCurrentLineStart.AddSeconds(2) > DateTime.Now;
-
-                        if (!EditCurrentLine)
+                        if (CurrentEditedLines[x.Id].StartTime.AddSeconds(2) < now)
+                        {
+                            CurrentEditedLines.Remove(x.Id);
                             Lines[x.LineNumber] = x;
+                        }
+                        else
+                            ;
                     }
                     else
                         Lines[x.LineNumber] = x;
@@ -198,7 +204,7 @@ namespace TCP_Text_Editor_Client
                     LineInfoBlock info = Lines.Find((LineInfoBlock a) => { return a.Id == CursorYId; });
                     if (info == null && CursorY == 0)
                         info = Lines[0];
-                    if ((info != null)  || (info == null && CursorY == 0))
+                    if ((info != null) || (info == null && CursorY == 0))
                     {
                         int diff = info.LineNumber - CursorY;
                         ScrollY += diff;
@@ -276,17 +282,47 @@ namespace TCP_Text_Editor_Client
 
                     if (watchLineUpdate.ElapsedMilliseconds > (LoggedIn ? 150 : 1500))
                     {
-                        if (EditCurrentLine)
+                        if (CurrentEditedLines.Count > 0)
                         {
-                            int index = Lines.FindIndex((LineInfoBlock info) => { return info.Id == EditCurrentLineId; });
-                            if (index != -1)
+                            DateTime now = DateTime.UtcNow;
+
+                            List<LineInfoBlock> lines = new List<LineInfoBlock>();
+                            for (int i = 0; i < CurrentEditedLines.Count; i++)
                             {
-                                Lines[index].Data = EditCurrentLineData;
-                                SendPacket(new LineEditRequestPacket(Lines[index]));
+                                EditLineInfo edit = CurrentEditedLines.ElementAt(i).Value;
+                                int index = Lines.FindIndex((LineInfoBlock info) => { return info.Id == edit.LineId; });
+                                if (index == -1)
+                                {
+                                    CurrentEditedLines.Remove(CurrentEditedLines.ElementAt(i).Key);
+                                    i--;
+                                    continue;
+                                }
+                                //Lines[index].Data = edit.
+                                lines.Add(edit.Line);
+
+                                if (edit.StartTime.AddMilliseconds(2000) < now)
+                                {
+                                    CurrentEditedLines.Remove(CurrentEditedLines.ElementAt(i).Key);
+                                    i--;
+                                    continue;
+                                }
                             }
 
-                            EditCurrentLine = EditCurrentLineStart.AddSeconds(1) > DateTime.Now;
+                            SendPacket(new LineEditRequestPacket(lines));
                         }
+
+
+                        //if (EditCurrentLine)
+                        //{
+                        //    int index = Lines.FindIndex((LineInfoBlock info) => { return info.Id == EditCurrentLineId; });
+                        //    if (index != -1)
+                        //    {
+                        //        Lines[index].Data = EditCurrentLineData;
+                        //        SendPacket(new LineEditRequestPacket(Lines[index]));
+                        //    }
+
+                        //    EditCurrentLine = EditCurrentLineStart.AddSeconds(1) > DateTime.UtcNow;
+                        //}
                         watchLineUpdate.Restart();
                     }
 
@@ -612,13 +648,23 @@ namespace TCP_Text_Editor_Client
                                 Lines[CursorY].Data.Substring(0, CursorX - 1) +
                                 Lines[CursorY].Data.Substring(CursorX, Lines[CursorY].Data.Length - CursorX);
 
-                                EditCurrentLine = true;
-                                EditCurrentLineStart = DateTime.Now;
-                                EditCurrentLineId = Lines[CursorY].Id;
-                                EditCurrentLineData = Lines[CursorY].Data;
-                                EditCurrentLineNum = CursorY;
+                                //EditCurrentLine = true;
+                                //EditCurrentLineStart = DateTime.UtcNow;
+                                //EditCurrentLineId = Lines[CursorY].Id;
+                                //EditCurrentLineData = Lines[CursorY].Data;
+                                //EditCurrentLineNum = CursorY;
+                                //Lines[CursorY].LockedBy = Username;
+                                //Lines[CursorY].Locked = true;
+
+                                ushort id = Lines[CursorY].Id;
+                                if (!CurrentEditedLines.ContainsKey(id))
+                                    CurrentEditedLines.Add(id, new EditLineInfo(id, CursorY, Lines[CursorY]));
+
+                                CurrentEditedLines[id].StartTime = DateTime.UtcNow;
                                 Lines[CursorY].LockedBy = Username;
                                 Lines[CursorY].Locked = true;
+
+
                                 //SendPacket(new LineEditRequestPacket(Lines[CursorY]));
 
                             }
@@ -663,6 +709,7 @@ namespace TCP_Text_Editor_Client
                             "")
                             );
                     }
+                    // MAKE IT ADD LIKE A TEMP LINE THAT YOU CAN EDIT YES
                 }
 
             }
@@ -673,7 +720,10 @@ namespace TCP_Text_Editor_Client
                 {
                     //if (CursorX > 0)
                     {
-                        if (CursorX < Lines[CursorY].Data.Length + 1)
+                        if (CursorX >= Lines[CursorY].Data.Length + 1)
+                            CursorX = Lines[CursorY].Data.Length;
+
+                        //if (CursorX < Lines[CursorY].Data.Length + 1)
                         {
                             string n1 = info.KeyChar.ToString().Replace("\t", "    ");
                             int amt = n1.Length;
@@ -695,15 +745,16 @@ namespace TCP_Text_Editor_Client
                                 }
                                 //SendPacket(new LineEditRequestPacket(Lines[CursorY]));
 
-                                EditCurrentLine = true;
-                                EditCurrentLineStart = DateTime.Now;
-                                EditCurrentLineId = Lines[CursorY].Id;
-                                EditCurrentLineData = Lines[CursorY].Data;
-                                EditCurrentLineNum = CursorY;
+                                ushort id = Lines[CursorY].Id;
+                                if (!CurrentEditedLines.ContainsKey(id))
+                                    CurrentEditedLines.Add(id, new EditLineInfo(id, CursorY, Lines[CursorY]));
+
+                                CurrentEditedLines[id].StartTime = DateTime.UtcNow;
                                 Lines[CursorY].LockedBy = Username;
                                 Lines[CursorY].Locked = true;
+                                CursorX += amt;
                             }
-                            CursorX += amt;
+
                         }
                     }
                 }

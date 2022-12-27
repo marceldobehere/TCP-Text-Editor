@@ -24,7 +24,7 @@ namespace TCP_Text_Editor_Server.InfoBlocks
 
 
             Locked = false;
-            LockTime = DateTime.Now;
+            LockTime = DateTime.UtcNow;
             LockedBy = "";
         }
 
@@ -36,7 +36,7 @@ namespace TCP_Text_Editor_Server.InfoBlocks
 
 
             Locked = false;
-            LockTime = DateTime.Now;
+            LockTime = DateTime.UtcNow;
             LockedBy = "";
         }
 
