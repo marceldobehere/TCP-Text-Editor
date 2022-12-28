@@ -39,7 +39,7 @@ namespace TCP_Text_Editor_Server
         public ulong TotalPacketsSentOld = 0;
         public ulong TotalPacketsReceivedOld = 0;
 
-
+        public DateTime ServerStarted { get; private set; }
 
 
         public Server(string basePath, string ip = "localhost", int port = 54545)
@@ -57,6 +57,8 @@ namespace TCP_Text_Editor_Server
 
             UsernameLogins = new Dictionary<string, int>();
             Files = new Dictionary<string, FileInfoBlock>();
+
+            ServerStarted = DateTime.UtcNow;
         }
 
         public void Start()
@@ -65,6 +67,7 @@ namespace TCP_Text_Editor_Server
             MainServerSocket.Listen(100);
 
             ServerOn = true;
+            ServerStarted = DateTime.UtcNow;
         }
 
         public void Stop()
@@ -189,7 +192,7 @@ namespace TCP_Text_Editor_Server
             TotalPacketsReceivedOld = TotalPacketsReceived;
             TotalPacketsSentOld = TotalPacketsSent;
 
-            Console.Title = $"STATS: REC: {TotalBytesReceived}, SENT: {TotalBytesSent}, ({diffSent} B/S UP, {diffReceived} B/S DOWN) ({diffPacketsSent} P/S UP, {diffPacketsReceived} P/S DOWN)";
+            Console.Title = $"STATS: REC: {TotalBytesReceived}, SENT: {TotalBytesSent}, ({diffSent} B/S UP, {diffReceived} B/S DOWN) ({diffPacketsSent} P/S UP, {diffPacketsReceived} P/S DOWN), ON FOR: {(ServerStarted - DateTime.UtcNow).ToString(@"dd\.hh\:mm\:ss")}";
         }
 
 

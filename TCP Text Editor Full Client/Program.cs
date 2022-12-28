@@ -75,7 +75,7 @@ namespace TCP_Text_Editor_Full_Client
 
 
             Console.WriteLine("> Requesting test.txt");
-            client.SendPacket(new FileRequestPacket("test.txt", 0, 30, 0));
+            client.SendPacket(new FileRequestPacket("test.txt", 0, 30, 0, new List<int>()));
 
 
             System.Threading.Thread.Sleep(600);

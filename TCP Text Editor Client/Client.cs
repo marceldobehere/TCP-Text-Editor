@@ -794,7 +794,7 @@ namespace TCP_Text_Editor_Client
 
                     if (CursorY2 < Lines.Count)
                         CursorYId = 2;
-                    CursorYIdPlsNot = 0;
+                    CursorYIdPlsNot = 2;
                     if (CursorY < Lines.Count)
                         CursorYIdPlsNot = Lines[CursorY].Id;
 
@@ -827,7 +827,7 @@ namespace TCP_Text_Editor_Client
                     Lines[CursorY2].Data = l1;
                     Lines.Insert(CursorY, new LineInfoBlock(l2, 2, CursorY));
 
-                    System.Threading.Thread.Sleep(10);
+                    System.Threading.Thread.Sleep(30);
                 }
 
             }
