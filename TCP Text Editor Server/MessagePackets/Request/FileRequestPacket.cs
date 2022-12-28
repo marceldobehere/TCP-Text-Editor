@@ -17,8 +17,10 @@ namespace TCP_Text_Editor_Server.MessagePackets
 
         public int LineHash;
 
+        public List<int> LineHashes;
 
-        public FileRequestPacket(string relativePath, int firstLineNum, int lineCount, int lineHash)
+
+        public FileRequestPacket(string relativePath, int firstLineNum, int lineCount, int lineHash, List<int> lineHashes)
         {
             MessagePacketType = MessagePacketTypeEnum.FILE_REQ;
             RelativePath = relativePath;
@@ -27,9 +29,10 @@ namespace TCP_Text_Editor_Server.MessagePackets
             UseLineNumber = true;
             LineCount = lineCount;
             LineHash = lineHash;
+            LineHashes = lineHashes;
         }
 
-        public FileRequestPacket(string relativePath, ushort firstLineId, int lineCount, int lineHash)
+        public FileRequestPacket(string relativePath, ushort firstLineId, int lineCount, int lineHash, List<int> lineHashes)
         {
             MessagePacketType = MessagePacketTypeEnum.FILE_REQ;
             RelativePath = relativePath;
@@ -38,6 +41,7 @@ namespace TCP_Text_Editor_Server.MessagePackets
             UseLineNumber = false;
             LineCount = lineCount;
             LineHash = lineHash;
+            LineHashes = lineHashes;
         }
 
         public FileRequestPacket(byte[] data)
@@ -60,6 +64,15 @@ namespace TCP_Text_Editor_Server.MessagePackets
             offset += 1;
             LineHash = BitConverter.ToInt32(data, offset);
             offset += 4;
+            int count = BitConverter.ToInt32(data, offset);
+            offset += 4;
+
+            LineHashes = new List<int>();
+            for (int i = 0; i < count; i++)
+            {
+                LineHashes.Add(BitConverter.ToInt32(data, offset));
+                offset += 4;
+            }
         }
 
         public override byte[] ToByteArray()
@@ -72,6 +85,11 @@ namespace TCP_Text_Editor_Server.MessagePackets
             bytes.AddRange(BitConverter.GetBytes(LineCount)); // 7 + x
             bytes.Add((byte)(UseLineNumber ? 1 : 0)); // 11 + x
             bytes.AddRange(BitConverter.GetBytes(LineHash)); // 15 + x
+
+            bytes.AddRange(BitConverter.GetBytes(LineHashes.Count)); // 15 + x
+            foreach (int bruh in LineHashes)
+                bytes.AddRange(BitConverter.GetBytes(bruh));
+
             return bytes.ToArray();
         }
     }

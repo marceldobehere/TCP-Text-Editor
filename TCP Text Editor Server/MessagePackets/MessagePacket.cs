@@ -95,7 +95,7 @@ namespace TCP_Text_Editor_Server.MessagePackets
                 case MessagePacketTypeEnum.LINE_EDIT_REQ:
                     return new LineEditRequestPacket(data);
                 case MessagePacketTypeEnum.LINE_EDIT_REP:
-                    return new LineEditReplyPacket(data);
+                    return new LineAddReplyPacket(data);
                 case MessagePacketTypeEnum.LINE_ADD_REQ:
                     return new LineAddRequestPacket(data);
 

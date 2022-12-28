@@ -328,15 +328,35 @@ namespace TCP_Text_Editor_Server
                         return;
                     }
 
+                    List<int> tempHashes = new List<int>();
                     for (int i = firstLineNum; i < firstLineNum + fp.LineCount && i < file.Lines.Count; i++)
+                    {
                         lines.Add(file.Lines[i]);
+                        tempHashes.Add(file.Lines[i].GetHashCode());
+                    }
 
                     int lineHash = LineInfoBlock.GetLinesHash(lines);
+
+                    for (int i = 0; i < lines.Count; i++)
+                    {
+                        if (fp.LineHashes.Contains(tempHashes[i]))
+                        {
+                            lines.RemoveAt(i);
+                            tempHashes.RemoveAt(i);
+                            i--;
+                        }
+                    }
+
+
+                    
 
                     if (lineHash == fp.LineHash)
                         ;// Console.WriteLine("< Line is the same!");
                     else
+                    {
+
                         client.SendPacket(new FileReplyPacket(true, lines, file.Lines.Count));
+                    }
                 }
 
 
@@ -474,7 +494,10 @@ namespace TCP_Text_Editor_Server
                 ConsoleLogHelper.WriteLine($"INSERT \"{lp.LineData1}\", \"{lp.LineData2}\"");
 
                 blocks[index].Data = lp.LineData1;
-                blocks.Insert(index + 1, new LineInfoBlock(lp.LineData2, Files[client.CurrentFile].RandomId, index + 1));
+                ushort id = Files[client.CurrentFile].RandomId;
+                blocks.Insert(index + 1, new LineInfoBlock(lp.LineData2, id, index + 1));
+
+                client.SendPacket(new LineAddReplyPacket(true, index + 1, id));
 
                 for (int i = 0; i < blocks.Count; i++)
                     blocks[i].LineNumber = i;
